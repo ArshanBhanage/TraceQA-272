@@ -163,30 +163,20 @@ Document type (if set): {document_type}
                 "existing_journeys": journeys
             }
         else:
-            result = agent_executor.invoke({
-                "input": f"User entered '{user_input}' which is invalid. Politely ask them to enter 1 or 2 only.",
-                "chat_history": messages,
-                "conversation_step": conversation_step,
-                "journey_name": state.get("journey_name"),
-                "document_type": state.get("document_type")
-            })
+            response_text = "Please enter 1 or 2 only.\n\n1) Add a journey\n2) New document under an existing journey"
             return {
                 **state,
-                "messages": messages + [AIMessage(content=result["output"])],
+                "messages": messages + [AIMessage(content=response_text)],
                 "conversation_step": "awaiting_option"
             }
     
     elif conversation_step == "awaiting_journey_name":
-        result = agent_executor.invoke({
-            "input": f"User wants to create a journey named '{user_input}'. Confirm the journey creation and ask them to upload a PDF document.",
-            "chat_history": messages,
-            "conversation_step": conversation_step,
-            "journey_name": user_input,
-            "document_type": state.get("document_type")
-        })
+        # Direct response without agent - simpler and more reliable
+        response_text = f"Great! Journey '{user_input}' will be created.\n\nPlease upload a PDF document for this journey.\n\n(You can type 'cancel' or 'exit' at any time to restart the conversation.)"
+        
         return {
             **state,
-            "messages": messages + [AIMessage(content=result["output"])],
+            "messages": messages + [AIMessage(content=response_text)],
             "journey_name": user_input,
             "conversation_step": "awaiting_document_upload"
         }
@@ -214,16 +204,10 @@ Document type (if set): {document_type}
         except:
             pass
         
-        result = agent_executor.invoke({
-            "input": "User entered an invalid selection. Politely ask them to enter a valid number from the list.",
-            "chat_history": messages,
-            "conversation_step": conversation_step,
-            "journey_name": state.get("journey_name"),
-            "document_type": state.get("document_type")
-        })
+        response_text = "Please enter a valid number from the journey list above."
         return {
             **state,
-            "messages": messages + [AIMessage(content=result["output"])],
+            "messages": messages + [AIMessage(content=response_text)],
             "conversation_step": "awaiting_journey_selection"
         }
     
@@ -232,37 +216,25 @@ Document type (if set): {document_type}
         doc_type = type_map.get(user_input)
         
         if doc_type:
-            result = agent_executor.invoke({
-                "input": f"User selected document type '{doc_type}'. Confirm the selection and ask them to upload their PDF document.",
-                "chat_history": messages,
-                "conversation_step": conversation_step,
-                "journey_name": state.get("journey_name"),
-                "document_type": doc_type
-            })
+            response_text = f"Perfect! You've selected '{doc_type.capitalize()}' as the document type.\n\nPlease upload your PDF document.\n\n(You can type 'cancel' or 'exit' at any time to restart the conversation.)"
             return {
                 **state,
-                "messages": messages + [AIMessage(content=result["output"])],
+                "messages": messages + [AIMessage(content=response_text)],
                 "document_type": doc_type,
                 "conversation_step": "awaiting_document_upload"
             }
         else:
-            result = agent_executor.invoke({
-                "input": "User entered an invalid option. Politely ask them to enter 1, 2, 3, or 4 only.",
-                "chat_history": messages,
-                "conversation_step": conversation_step,
-                "journey_name": state.get("journey_name"),
-                "document_type": state.get("document_type")
-            })
+            response_text = "Please enter a valid option (1, 2, 3, or 4).\n\n1. Addendum\n2. Annexture\n3. Email\n4. Other"
             return {
                 **state,
-                "messages": messages + [AIMessage(content=result["output"])],
+                "messages": messages + [AIMessage(content=response_text)],
                 "conversation_step": "awaiting_document_type"
             }
     
     elif conversation_step == "document_uploaded":
-        # After document upload, restart conversation
+        # After document upload, ask what to do next
         result = agent_executor.invoke({
-            "input": "The document has been uploaded and test cases are being generated. Thank the user and ask what they'd like to do next:\n\n1. Add another journey\n2. Add another document to an existing journey\n\nRemind them they can type 'cancel' or 'exit' at any time.",
+            "input": "Ask the user what they'd like to do next:\n\n1. Add another journey\n2. Add another document to an existing journey\n\nRemind them they can type 'cancel' or 'exit' at any time.",
             "chat_history": messages,
             "conversation_step": conversation_step,
             "journey_name": state.get("journey_name"),
@@ -271,7 +243,9 @@ Document type (if set): {document_type}
         return {
             **state,
             "messages": messages + [AIMessage(content=result["output"])],
-            "conversation_step": "awaiting_option"
+            "conversation_step": "awaiting_option",
+            "journey_name": None,
+            "document_type": None
         }
     
     return state

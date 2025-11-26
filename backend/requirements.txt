@@ -11,3 +11,4 @@ pinecone-client==5.0.1
 openai==1.55.3
 landingai==0.3.47
 python-multipart==0.0.20
+requests==2.32.3

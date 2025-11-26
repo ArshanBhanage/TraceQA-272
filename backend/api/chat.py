@@ -1,7 +1,8 @@
 from fastapi import APIRouter, UploadFile, File, Form
 from pydantic import BaseModel
 from agents.orchestrator import create_orchestrator_graph
-from langchain_core.messages import HumanMessage
+from agents.landing_ai_agent import create_landing_ai_agent
+from langchain_core.messages import HumanMessage, AIMessage
 import os
 import shutil
 from typing import Optional
@@ -9,6 +10,7 @@ from typing import Optional
 router = APIRouter()
 
 orchestrator_graph = create_orchestrator_graph()
+landing_ai_agent = create_landing_ai_agent()
 
 # Store conversation states in memory (use Redis/DB in production)
 conversation_states = {}
@@ -44,8 +46,28 @@ async def chat(request: ChatRequest):
         }
     
     state = conversation_states[session_id]
-    state["user_input"] = request.message
-    state["messages"].append(HumanMessage(content=request.message))
+    
+    # Handle empty message (used for getting initial/next message without user input)
+    if not request.message.strip():
+        # If conversation just started or needs reset, invoke initial flow
+        if state["conversation_step"] == "initial":
+            state["user_input"] = ""
+        elif state["conversation_step"] == "document_uploaded":
+            # Document was just uploaded, continue to next step
+            state["user_input"] = ""
+        else:
+            # Empty message at other steps, just return current state
+            ai_messages = [msg for msg in state["messages"] if hasattr(msg, "content")]
+            response_text = ai_messages[-1].content if ai_messages else "How can I help you?"
+            return ChatResponse(
+                response=response_text,
+                conversation_step=state.get("conversation_step", "initial"),
+                journey_name=state.get("journey_name"),
+                document_type=state.get("document_type")
+            )
+    else:
+        state["user_input"] = request.message
+        state["messages"].append(HumanMessage(content=request.message))
     
     result = orchestrator_graph.invoke(state)
     
@@ -94,11 +116,27 @@ async def upload_document(
     with open(file_path, "wb") as buffer:
         shutil.copyfileobj(file.file, buffer)
     
-    # Update conversation state to notify about test case generation
-    if session_id in conversation_states:
-        from langchain_core.messages import AIMessage
+    # Process document with Landing AI
+    try:
+        landing_ai_result = landing_ai_agent.process_document(
+            document_path=file_path,
+            journey_name=journey_name,
+            document_type=document_type
+        )
         
-        success_message = f"Document '{file.filename}' has been uploaded successfully! 🎉\n\nTest cases are now being generated for your journey. This may take a few moments..."
+        parse_success = True
+        chunks_count = len(landing_ai_result.get("chunks", []))
+    except Exception as e:
+        parse_success = False
+        chunks_count = 0
+        print(f"Landing AI processing error: {str(e)}")
+    
+    # Update conversation state after upload
+    if session_id in conversation_states:
+        if parse_success:
+            success_message = f"Document '{file.filename}' uploaded successfully!\n\nDocument parsed: {chunks_count} chunks extracted."
+        else:
+            success_message = f"Document '{file.filename}' uploaded successfully!"
         
         conversation_states[session_id] = {
             "messages": [AIMessage(content=success_message)],
@@ -113,5 +151,16 @@ async def upload_document(
         "message": "Document uploaded successfully. Test cases are being generated.",
         "path": file_path,
         "filename": file.filename,
-        "journey_name": journey_name
+        "journey_name": journey_name,
+        "parse_success": parse_success,
+        "chunks_count": chunks_count if parse_success else 0
     }
+
+
+@router.post("/reset")
+async def reset_session(session_id: str = "default"):
+    """Reset conversation session"""
+    if session_id in conversation_states:
+        del conversation_states[session_id]
+    
+    return {"message": "Session reset successfully"}

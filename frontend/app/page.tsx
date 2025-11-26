@@ -26,17 +26,43 @@ export default function Home() {
   const sessionId = "user-session-1";
 
   useEffect(() => {
-    // Show default message on component mount
-    const defaultMessage: Message = {
-      role: "assistant",
-      content: `Hello! I'm your TraceQA assistant. Please select an option:
+    // Get initial message from backend
+    const getInitialMessage = async () => {
+      setIsLoading(true);
+      try {
+        const response = await fetch("http://localhost:8000/api/chat", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({ message: "", session_id: sessionId }),
+        });
 
-1) Add a journey (e.g., POS, etc.)
-2) New document under an existing journey (new updates to the journey in the form of annextures, addendums, emails etc.)
-
-Please enter 1 or 2:`,
+        const data = await response.json();
+        const initialMessage: Message = {
+          role: "assistant",
+          content: data.response,
+        };
+        setMessages([initialMessage]);
+        
+        setChatState({
+          conversationStep: data.conversation_step,
+          journeyName: data.journey_name,
+          documentType: data.document_type,
+        });
+      } catch (error) {
+        console.error("Error:", error);
+        const errorMessage: Message = {
+          role: "assistant",
+          content: "Sorry, there was an error connecting to the server.",
+        };
+        setMessages([errorMessage]);
+      } finally {
+        setIsLoading(false);
+      }
     };
-    setMessages([defaultMessage]);
+    
+    getInitialMessage();
   }, []);
 
   const sendMessage = async () => {
@@ -115,17 +141,40 @@ Please enter 1 or 2:`,
         };
         setMessages((prev) => [...prev, errorMessage]);
       } else {
-        const successMessage: Message = {
+        // Add upload confirmation message
+        const uploadMessage: Message = {
           role: "assistant",
-          content: `Document "${file.name}" uploaded successfully!\n\nWould you like to:\n1) Add another journey\n2) Add another document to an existing journey\n\nPlease enter 1 or 2:`,
+          content: data.parse_success 
+            ? `Document "${file.name}" uploaded successfully!\n\nDocument parsed: ${data.chunks_count} chunks extracted.`
+            : `Document "${file.name}" uploaded successfully!`,
         };
-        setMessages((prev) => [...prev, successMessage]);
+        setMessages((prev) => [...prev, uploadMessage]);
         
-        setChatState({
-          conversationStep: "awaiting_option",
-          journeyName: null,
-          documentType: null,
-        });
+        // Now get the next step from backend
+        try {
+          const chatResponse = await fetch("http://localhost:8000/api/chat", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({ message: "", session_id: sessionId }),
+          });
+          
+          const chatData = await chatResponse.json();
+          const nextMessage: Message = {
+            role: "assistant",
+            content: chatData.response,
+          };
+          setMessages((prev) => [...prev, nextMessage]);
+          
+          setChatState({
+            conversationStep: chatData.conversation_step,
+            journeyName: chatData.journey_name,
+            documentType: chatData.document_type,
+          });
+        } catch (err) {
+          console.error("Error getting next step:", err);
+        }
       }
     } catch (error) {
       console.error("Error:", error);
@@ -148,23 +197,49 @@ Please enter 1 or 2:`,
     }
   };
 
-  const startNewChat = () => {
-    const defaultMessage: Message = {
-      role: "assistant",
-      content: `Hello! I'm your TraceQA assistant. Please select an option:
+  const startNewChat = async () => {
+    setIsLoading(true);
+    try {
+      // Reset session on backend
+      await fetch("http://localhost:8000/api/reset", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(sessionId),
+      });
+      
+      // Get fresh initial message
+      const response = await fetch("http://localhost:8000/api/chat", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ message: "", session_id: sessionId }),
+      });
 
-1) Add a journey (e.g., POS, etc.)
-2) New document under an existing journey (new updates to the journey in the form of annextures, addendums, emails etc.)
-
-Please enter 1 or 2:`,
-    };
-    setMessages([defaultMessage]);
-    setInput("");
-    setChatState({
-      conversationStep: "awaiting_option",
-      journeyName: null,
-      documentType: null,
-    });
+      const data = await response.json();
+      const initialMessage: Message = {
+        role: "assistant",
+        content: data.response,
+      };
+      setMessages([initialMessage]);
+      setInput("");
+      setChatState({
+        conversationStep: data.conversation_step,
+        journeyName: data.journey_name,
+        documentType: data.document_type,
+      });
+    } catch (error) {
+      console.error("Error:", error);
+      const errorMessage: Message = {
+        role: "assistant",
+        content: "Sorry, there was an error resetting the chat.",
+      };
+      setMessages([errorMessage]);
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   return (
