@@ -2,7 +2,9 @@ from fastapi import APIRouter, UploadFile, File, Form
 from pydantic import BaseModel
 from agents.orchestrator import create_orchestrator_graph
 from agents.landing_ai_agent import create_landing_ai_agent
+from agents.test_case_generator_agent import create_test_case_generator_agent
 from langchain_core.messages import HumanMessage, AIMessage
+from config import DOCUMENTS_DIR
 import os
 import shutil
 from typing import Optional
@@ -11,6 +13,7 @@ router = APIRouter()
 
 orchestrator_graph = create_orchestrator_graph()
 landing_ai_agent = create_landing_ai_agent()
+test_case_generator = create_test_case_generator_agent()
 
 # Store conversation states in memory (use Redis/DB in production)
 conversation_states = {}
@@ -101,40 +104,61 @@ async def upload_document(
     if not file.filename.endswith('.pdf'):
         return {"error": "Only PDF files are allowed"}
     
-    # Create directory structure
+    # Create directory structure using centralized path config
     if document_type:
         # For existing journey with document type
-        upload_path = f"documents/journeys/{journey_name}/{document_type}"
+        upload_path = DOCUMENTS_DIR / "journeys" / journey_name / document_type
     else:
         # For new journey
-        upload_path = f"documents/journeys/{journey_name}"
+        upload_path = DOCUMENTS_DIR / "journeys" / journey_name
     
-    os.makedirs(upload_path, exist_ok=True)
+    upload_path.mkdir(parents=True, exist_ok=True)
     
     # Save file
-    file_path = os.path.join(upload_path, file.filename)
+    file_path = upload_path / file.filename
     with open(file_path, "wb") as buffer:
         shutil.copyfileobj(file.file, buffer)
     
     # Process document with Landing AI
     try:
         landing_ai_result = landing_ai_agent.process_document(
-            document_path=file_path,
+            document_path=str(file_path),
             journey_name=journey_name,
             document_type=document_type
         )
         
         parse_success = True
         chunks_count = len(landing_ai_result.get("chunks", []))
+        
+        # Generate test cases from chunks
+        print(f"[INFO] Starting test case generation for {file.filename}")
+        test_case_result = test_case_generator.process_document(
+            journey_name=journey_name,
+            document_filename=file.filename,
+            parse_result=landing_ai_result.get("parse_result", {}),
+            document_type=document_type
+        )
+        
+        total_test_cases = test_case_result.get("summary", {}).get("total_test_cases", 0)
+        print(f"[INFO] Generated {total_test_cases} test cases for {file.filename}")
+        
+        # Merge test cases for entire journey
+        print(f"[INFO] Merging all test cases for journey: {journey_name}")
+        merged_result = test_case_generator.merge_journey_test_cases(journey_name)
+        total_merged_test_cases = merged_result.get("summary", {}).get("total_test_cases", 0)
+        print(f"[INFO] Total test cases for journey '{journey_name}': {total_merged_test_cases}")
+        
     except Exception as e:
         parse_success = False
         chunks_count = 0
+        total_test_cases = 0
+        total_merged_test_cases = 0
         print(f"Landing AI processing error: {str(e)}")
     
     # Update conversation state after upload
     if session_id in conversation_states:
         if parse_success:
-            success_message = f"Document '{file.filename}' uploaded successfully!\n\nDocument parsed: {chunks_count} chunks extracted."
+            success_message = f"Document '{file.filename}' uploaded successfully!\n\nDocument parsed: {chunks_count} chunks extracted.\nGenerated {total_test_cases} test cases for this document.\nTotal test cases for journey '{journey_name}': {total_merged_test_cases}"
         else:
             success_message = f"Document '{file.filename}' uploaded successfully!"
         
@@ -148,12 +172,14 @@ async def upload_document(
         }
     
     return {
-        "message": "Document uploaded successfully. Test cases are being generated.",
+        "message": "Document uploaded successfully. Test cases generated.",
         "path": file_path,
         "filename": file.filename,
         "journey_name": journey_name,
         "parse_success": parse_success,
-        "chunks_count": chunks_count if parse_success else 0
+        "chunks_count": chunks_count if parse_success else 0,
+        "test_cases_generated": total_test_cases if parse_success else 0,
+        "total_journey_test_cases": total_merged_test_cases if parse_success else 0
     }
 
 

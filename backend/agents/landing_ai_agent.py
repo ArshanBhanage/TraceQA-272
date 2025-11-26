@@ -6,6 +6,7 @@ import requests
 import json
 from typing import Dict, Any, Optional
 from dotenv import load_dotenv
+from config import DOCUMENTS_DIR
 
 load_dotenv()
 
@@ -148,25 +149,25 @@ class LandingAIAgent:
         # Step 1: Parse the document
         parse_result = self.parse_document(document_path)
         
-        # Determine save directory
+        # Determine save directory using centralized path config
         if document_type:
-            save_dir = f"documents/journeys/{journey_name}/{document_type}"
+            save_dir = DOCUMENTS_DIR / "journeys" / journey_name / document_type
         else:
-            save_dir = f"documents/journeys/{journey_name}"
+            save_dir = DOCUMENTS_DIR / "journeys" / journey_name
         
-        os.makedirs(save_dir, exist_ok=True)
+        save_dir.mkdir(parents=True, exist_ok=True)
         
         # Get base filename without extension
         base_filename = os.path.splitext(os.path.basename(document_path))[0]
         
         # Step 2: Save parse result
-        parse_result_path = os.path.join(save_dir, f"{base_filename}_parse_result.json")
+        parse_result_path = save_dir / f"{base_filename}_parse_result.json"
         with open(parse_result_path, 'w') as f:
             json.dump(parse_result, f, indent=2)
         
         result = {
             "parse_result": parse_result,
-            "parse_result_path": parse_result_path,
+            "parse_result_path": str(parse_result_path),
             "markdown": parse_result.get("markdown", ""),
             "chunks": parse_result.get("chunks", []),
             "metadata": parse_result.get("metadata", {})
@@ -183,14 +184,14 @@ class LandingAIAgent:
                 print(f"[DEBUG] Extract API response received: {extraction_result.keys() if isinstance(extraction_result, dict) else type(extraction_result)}")
                 
                 # Save extraction result
-                extraction_result_path = os.path.join(save_dir, f"{base_filename}_extraction_result.json")
+                extraction_result_path = save_dir / f"{base_filename}_extraction_result.json"
                 with open(extraction_result_path, 'w') as f:
                     json.dump(extraction_result, f, indent=2)
                 
                 print(f"[DEBUG] Extraction result saved to: {extraction_result_path}")
                 
                 result["extraction_result"] = extraction_result
-                result["extraction_result_path"] = extraction_result_path
+                result["extraction_result_path"] = str(extraction_result_path)
             except Exception as e:
                 print(f"[ERROR] Extract API failed: {str(e)}")
                 print(f"[ERROR] Error type: {type(e).__name__}")

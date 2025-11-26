@@ -7,6 +7,7 @@ from langchain.agents import AgentExecutor, create_tool_calling_agent
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
 import os
 from dotenv import load_dotenv
+from config import DOCUMENTS_DIR
 
 load_dotenv()
 
@@ -36,10 +37,10 @@ def get_llm():
 @tool
 def get_existing_journeys() -> list[str]:
     """Get list of existing journey folders from the documents directory."""
-    base_path = "documents/journeys"
-    if not os.path.exists(base_path):
+    base_path = DOCUMENTS_DIR / "journeys"
+    if not base_path.exists():
         return []
-    return [d for d in os.listdir(base_path) if os.path.isdir(os.path.join(base_path, d))]
+    return [d.name for d in base_path.iterdir() if d.is_dir()]
 
 
 def chatbot_agent_node(state: AgentState):
