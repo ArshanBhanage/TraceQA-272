@@ -7,6 +7,7 @@ from langchain_core.messages import HumanMessage, AIMessage
 from config import DOCUMENTS_DIR
 import os
 import shutil
+import asyncio
 from typing import Optional
 
 router = APIRouter()
@@ -17,6 +18,9 @@ test_case_generator = create_test_case_generator_agent()
 
 # Store conversation states in memory (use Redis/DB in production)
 conversation_states = {}
+
+# Store processing status for background jobs
+processing_status = {}
 
 
 class ChatRequest(BaseModel):
@@ -91,6 +95,105 @@ async def chat(request: ChatRequest):
     )
 
 
+def process_document_background(
+    file_path: str,
+    filename: str,
+    journey_name: str,
+    document_type: Optional[str],
+    session_id: str
+):
+    """Background task to process document with Landing AI and generate test cases"""
+    job_id = f"{session_id}_{filename}"
+    
+    try:
+        processing_status[job_id] = {
+            "status": "processing",
+            "stage": "parsing",
+            "message": "Parsing document with Landing AI..."
+        }
+        
+        # Process document with Landing AI
+        landing_ai_result = landing_ai_agent.process_document(
+            document_path=file_path,
+            journey_name=journey_name,
+            document_type=document_type
+        )
+        
+        chunks_count = len(landing_ai_result.get("chunks", []))
+        
+        processing_status[job_id] = {
+            "status": "processing",
+            "stage": "generating_tests",
+            "message": f"Parsed {chunks_count} chunks. Generating test cases..."
+        }
+        
+        # Generate test cases from chunks
+        print(f"[INFO] Starting test case generation for {filename}")
+        test_case_result = test_case_generator.process_document(
+            journey_name=journey_name,
+            document_filename=filename,
+            parse_result=landing_ai_result.get("parse_result", {}),
+            document_type=document_type
+        )
+        
+        total_test_cases = test_case_result.get("summary", {}).get("total_test_cases", 0)
+        print(f"[INFO] Generated {total_test_cases} test cases for {filename}")
+        
+        processing_status[job_id] = {
+            "status": "processing",
+            "stage": "merging",
+            "message": f"Generated {total_test_cases} test cases. Merging journey results..."
+        }
+        
+        # Merge test cases for entire journey
+        print(f"[INFO] Merging all test cases for journey: {journey_name}")
+        merged_result = test_case_generator.merge_journey_test_cases(journey_name)
+        total_merged_test_cases = merged_result.get("summary", {}).get("total_test_cases", 0)
+        print(f"[INFO] Total test cases for journey '{journey_name}': {total_merged_test_cases}")
+        
+        # Update status to completed
+        processing_status[job_id] = {
+            "status": "completed",
+            "stage": "done",
+            "message": f"✅ Processing complete!\n\n📄 Document: {filename}\n📊 Chunks extracted: {chunks_count}\n🧪 Test cases generated: {total_test_cases}\n📋 Total journey test cases: {total_merged_test_cases}",
+            "chunks_count": chunks_count,
+            "test_cases": total_test_cases,
+            "total_journey_test_cases": total_merged_test_cases
+        }
+        
+        # Update conversation state
+        if session_id in conversation_states:
+            conversation_states[session_id] = {
+                "messages": [AIMessage(content=processing_status[job_id]["message"])],
+                "user_input": "",
+                "selected_option": None,
+                "journey_name": journey_name,
+                "conversation_step": "document_uploaded",
+                "document_type": document_type
+            }
+        
+    except Exception as e:
+        error_msg = f"❌ Error processing document: {str(e)}"
+        print(f"[ERROR] Background processing failed: {str(e)}")
+        processing_status[job_id] = {
+            "status": "failed",
+            "stage": "error",
+            "message": error_msg,
+            "error": str(e)
+        }
+        
+        # Update conversation state with error
+        if session_id in conversation_states:
+            conversation_states[session_id] = {
+                "messages": [AIMessage(content=error_msg)],
+                "user_input": "",
+                "selected_option": None,
+                "journey_name": journey_name,
+                "conversation_step": "document_uploaded",
+                "document_type": document_type
+            }
+
+
 @router.post("/upload")
 async def upload_document(
     file: UploadFile = File(...),
@@ -119,68 +222,42 @@ async def upload_document(
     with open(file_path, "wb") as buffer:
         shutil.copyfileobj(file.file, buffer)
     
-    # Process document with Landing AI
-    try:
-        landing_ai_result = landing_ai_agent.process_document(
-            document_path=str(file_path),
-            journey_name=journey_name,
-            document_type=document_type
-        )
-        
-        parse_success = True
-        chunks_count = len(landing_ai_result.get("chunks", []))
-        
-        # Generate test cases from chunks
-        print(f"[INFO] Starting test case generation for {file.filename}")
-        test_case_result = test_case_generator.process_document(
-            journey_name=journey_name,
-            document_filename=file.filename,
-            parse_result=landing_ai_result.get("parse_result", {}),
-            document_type=document_type
-        )
-        
-        total_test_cases = test_case_result.get("summary", {}).get("total_test_cases", 0)
-        print(f"[INFO] Generated {total_test_cases} test cases for {file.filename}")
-        
-        # Merge test cases for entire journey
-        print(f"[INFO] Merging all test cases for journey: {journey_name}")
-        merged_result = test_case_generator.merge_journey_test_cases(journey_name)
-        total_merged_test_cases = merged_result.get("summary", {}).get("total_test_cases", 0)
-        print(f"[INFO] Total test cases for journey '{journey_name}': {total_merged_test_cases}")
-        
-    except Exception as e:
-        parse_success = False
-        chunks_count = 0
-        total_test_cases = 0
-        total_merged_test_cases = 0
-        print(f"Landing AI processing error: {str(e)}")
+    # Create job_id and initialize status
+    job_id = f"{session_id}_{file.filename}"
+    processing_status[job_id] = {
+        "status": "processing",
+        "stage": "starting",
+        "message": "Starting document processing..."
+    }
     
-    # Update conversation state after upload
-    if session_id in conversation_states:
-        if parse_success:
-            success_message = f"Document '{file.filename}' uploaded successfully!\n\nDocument parsed: {chunks_count} chunks extracted.\nGenerated {total_test_cases} test cases for this document.\nTotal test cases for journey '{journey_name}': {total_merged_test_cases}"
-        else:
-            success_message = f"Document '{file.filename}' uploaded successfully!"
-        
-        conversation_states[session_id] = {
-            "messages": [AIMessage(content=success_message)],
-            "user_input": "",
-            "selected_option": None,
-            "journey_name": journey_name,
-            "conversation_step": "document_uploaded",
-            "document_type": document_type
-        }
+    # Fire and forget - true background execution using asyncio
+    asyncio.create_task(
+        asyncio.to_thread(
+            process_document_background,
+            str(file_path),
+            file.filename,
+            journey_name,
+            document_type,
+            session_id
+        )
+    )
     
+    # Return immediate response
     return {
-        "message": "Document uploaded successfully. Test cases generated.",
-        "path": file_path,
+        "success": True,
+        "message": "✅ Got your file. I'm processing it now — this can take a few minutes. I'll send the results as soon as they're ready.",
         "filename": file.filename,
         "journey_name": journey_name,
-        "parse_success": parse_success,
-        "chunks_count": chunks_count if parse_success else 0,
-        "test_cases_generated": total_test_cases if parse_success else 0,
-        "total_journey_test_cases": total_merged_test_cases if parse_success else 0
+        "job_id": job_id
     }
+
+
+@router.get("/processing-status/{job_id}")
+async def get_processing_status(job_id: str):
+    """Get status of background document processing"""
+    if job_id in processing_status:
+        return processing_status[job_id]
+    return {"status": "not_found", "message": "Job not found"}
 
 
 @router.post("/reset")

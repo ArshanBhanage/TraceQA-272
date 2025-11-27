@@ -134,6 +134,11 @@ export default function Home() {
 
       const data = await response.json();
       
+      // Always stop loading immediately after upload completes
+      setIsLoading(false);
+      setSelectedFile(null);
+      e.target.value = '';
+      
       if (data.error) {
         const errorMessage: Message = {
           role: "assistant",
@@ -141,39 +146,17 @@ export default function Home() {
         };
         setMessages((prev) => [...prev, errorMessage]);
       } else {
-        // Add upload confirmation message
+        // Add immediate processing message
         const uploadMessage: Message = {
           role: "assistant",
-          content: data.parse_success 
-            ? `Document "${file.name}" uploaded successfully!\n\nDocument parsed: ${data.chunks_count} chunks extracted.`
-            : `Document "${file.name}" uploaded successfully!`,
+          content: data.message || "✅ Got your file. I'm processing it now — this can take a few minutes. I'll send the results as soon as they're ready.",
         };
         setMessages((prev) => [...prev, uploadMessage]);
         
-        // Now get the next step from backend
-        try {
-          const chatResponse = await fetch("http://localhost:8000/api/chat", {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-            },
-            body: JSON.stringify({ message: "", session_id: sessionId }),
-          });
-          
-          const chatData = await chatResponse.json();
-          const nextMessage: Message = {
-            role: "assistant",
-            content: chatData.response,
-          };
-          setMessages((prev) => [...prev, nextMessage]);
-          
-          setChatState({
-            conversationStep: chatData.conversation_step,
-            journeyName: chatData.journey_name,
-            documentType: chatData.document_type,
-          });
-        } catch (err) {
-          console.error("Error getting next step:", err);
+        // Start polling for processing status
+        const jobId = data.job_id;
+        if (jobId) {
+          pollProcessingStatus(jobId);
         }
       }
     } catch (error) {
@@ -183,11 +166,80 @@ export default function Home() {
         content: "Sorry, there was an error uploading your document.",
       };
       setMessages((prev) => [...prev, errorMessage]);
-    } finally {
       setIsLoading(false);
       setSelectedFile(null);
       e.target.value = '';
     }
+  };
+
+  const pollProcessingStatus = async (jobId: string) => {
+    const maxAttempts = 60; // Poll for up to 5 minutes (60 * 5 seconds)
+    let attempts = 0;
+
+    const poll = async () => {
+      try {
+        const response = await fetch(`http://localhost:8000/api/processing-status/${jobId}`);
+        const data = await response.json();
+
+        if (data.status === 'completed') {
+          // Add completion message
+          const completionMessage: Message = {
+            role: "assistant",
+            content: data.message,
+          };
+          setMessages((prev) => [...prev, completionMessage]);
+          
+          // Get next step from backend
+          try {
+            const chatResponse = await fetch("http://localhost:8000/api/chat", {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+              },
+              body: JSON.stringify({ message: "", session_id: sessionId }),
+            });
+            
+            const chatData = await chatResponse.json();
+            const nextMessage: Message = {
+              role: "assistant",
+              content: chatData.response,
+            };
+            setMessages((prev) => [...prev, nextMessage]);
+            
+            setChatState({
+              conversationStep: chatData.conversation_step,
+              journeyName: chatData.journey_name,
+              documentType: chatData.document_type,
+            });
+          } catch (err) {
+            console.error("Error getting next step:", err);
+          }
+        } else if (data.status === 'failed') {
+          // Add error message
+          const errorMessage: Message = {
+            role: "assistant",
+            content: data.message || "Processing failed. Please try again.",
+          };
+          setMessages((prev) => [...prev, errorMessage]);
+        } else if (data.status === 'processing' && attempts < maxAttempts) {
+          // Continue polling
+          attempts++;
+          setTimeout(poll, 5000); // Poll every 5 seconds
+        } else if (attempts >= maxAttempts) {
+          // Timeout
+          const timeoutMessage: Message = {
+            role: "assistant",
+            content: "⏱️ Processing is taking longer than expected. Please check back later or try uploading the document again.",
+          };
+          setMessages((prev) => [...prev, timeoutMessage]);
+        }
+      } catch (error) {
+        console.error("Error polling status:", error);
+      }
+    };
+
+    // Start polling after a short delay
+    setTimeout(poll, 3000);
   };
 
   const handleKeyPress = (e: React.KeyboardEvent) => {
