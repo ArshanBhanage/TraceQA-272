@@ -16,7 +16,7 @@ export default function Home() {
   const renderMainContent = () => {
     switch (currentPage) {
       case "test-cases":
-        return <TestCasesView journeyName={currentJourney} />;
+        return <TestCasesView key={currentJourney || 'default'} journeyName={currentJourney} />;
       case "journeys":
         return (
           <div className="h-full flex items-center justify-center bg-gray-950">

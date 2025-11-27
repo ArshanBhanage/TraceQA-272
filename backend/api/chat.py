@@ -109,19 +109,16 @@ async def generate_test_cases_async(
 ):
     """Async task to generate test cases in background"""
     try:
-        chunks_count = len(parse_result.get("chunks", []))
-        
         processing_status[job_id]["stage"] = "generating_tests"
-        processing_status[job_id]["message"] = f"Generating test cases for {chunks_count} chunks..."
-        processing_status[job_id]["chunks_processed"] = 0
-        processing_status[job_id]["total_chunks"] = chunks_count
+        processing_status[job_id]["message"] = f"Generating test cases from document..."
         
         # Progress callback to update status
-        def update_progress(chunk_index: int, total_chunks: int):
-            processing_status[job_id]["chunks_processed"] = chunk_index + 1
-            processing_status[job_id]["message"] = f"Processing chunk {chunk_index + 1}/{total_chunks}..."
+        def update_progress(current_step: int, total_steps: int):
+            steps = ["Analyzing document", "Organizing test cases", "Saving results"]
+            if current_step < len(steps):
+                processing_status[job_id]["message"] = f"{steps[current_step]}..."
         
-        # Generate test cases from chunks
+        # Generate test cases from full document
         print(f"[INFO] Starting async test case generation for {filename}")
         test_case_result = await asyncio.to_thread(
             test_case_generator.process_document,
@@ -151,8 +148,7 @@ async def generate_test_cases_async(
         processing_status[job_id] = {
             "status": "completed",
             "stage": "done",
-            "message": f"Processing complete!\n\nDocument: {filename}\nChunks extracted: {chunks_count}\nTest cases generated: {total_test_cases}\nTotal journey test cases: {total_merged_test_cases}",
-            "chunks_count": chunks_count,
+            "message": f"Processing complete!\n\nDocument: {filename}\nTest cases generated: {total_test_cases}\nTotal journey test cases: {total_merged_test_cases}",
             "test_cases": total_test_cases,
             "total_journey_test_cases": total_merged_test_cases
         }
@@ -387,13 +383,17 @@ async def get_journeys():
         }
 
 
+class ResetRequest(BaseModel):
+    session_id: Optional[str] = "default"
+
 @router.post("/reset")
-async def reset_session(session_id: str = "default"):
+async def reset_session(request: ResetRequest):
     """Reset conversation session"""
+    session_id = request.session_id
     if session_id in conversation_states:
         del conversation_states[session_id]
     
-    return {"message": "Session reset successfully"}
+    return {"message": "Session reset successfully", "success": True}
 
 
 @router.post("/generate-test-cases/{journey_name}")
@@ -479,8 +479,10 @@ async def generate_all_test_cases_for_journey(
                 document_type = parse_file.parent.name
             
             # Progress callback
-            def update_progress(chunk_index: int, total_chunks: int):
-                processing_status[job_id]["message"] = f"Document {idx + 1}/{total_docs} - Processing chunk {chunk_index + 1}/{total_chunks}..."
+            def update_progress(current_step: int, total_steps: int):
+                steps = ["Analyzing", "Organizing", "Saving"]
+                if current_step < len(steps):
+                    processing_status[job_id]["message"] = f"Document {idx + 1}/{total_docs} - {steps[current_step]}..."
             
             # Generate test cases for this document
             await asyncio.to_thread(

@@ -15,7 +15,7 @@ load_dotenv()
 
 
 class TestCaseGeneratorAgent:
-    """Agent for generating test cases from parsed document chunks"""
+    """Agent for generating test cases from parsed documents"""
     
     def __init__(self):
         self.llm = ChatOpenAI(
@@ -24,6 +24,196 @@ class TestCaseGeneratorAgent:
             openai_api_base=os.getenv("OPENROUTER_BASE_URL"),
             temperature=0.7
         )
+    
+    def generate_test_cases_from_document(self, document_markdown: str, document_name: str) -> Dict[str, Any]:
+        """
+        Generate test cases directly from full document markdown
+        
+        Args:
+            document_markdown: Full markdown content of the document
+            document_name: Name of the document for reference
+            
+        Returns:
+            Dict containing test cases categorized by type
+        """
+        if not document_markdown or len(document_markdown.strip()) < 50:
+            print(f"[WARNING] Document '{document_name}' is too short or empty")
+            return {
+                "test_cases": {
+                    "sanity": [],
+                    "regression": [],
+                    "positive": [],
+                    "negative": [],
+                    "edge": []
+                },
+                "error": "Document content too short"
+            }
+        
+        print(f"[INFO] Generating test cases from document: {document_name} ({len(document_markdown)} chars)")
+        
+        # Truncate if too long (keep within token limits)
+        max_chars = 15000
+        if len(document_markdown) > max_chars:
+            print(f"[WARNING] Document too long ({len(document_markdown)} chars), truncating to {max_chars}")
+            document_markdown = document_markdown[:max_chars] + "\n\n[... document truncated for processing ...]"
+        
+        system_prompt = """You are an expert QA engineer specializing in comprehensive test case generation.
+Your task is to analyze requirement documents and generate thorough test cases.
+
+CRITICAL: Your response must be ONLY valid JSON. Do not include any explanatory text, comments, or markdown.
+
+Generate test cases in these categories:
+1. Sanity - Basic smoke tests to verify core functionality works
+2. Regression - Tests to ensure existing functionality isn't broken  
+3. Positive - Valid input scenarios that should succeed
+4. Negative - Invalid inputs that should fail gracefully with proper error handling
+5. Edge - Boundary conditions, corner cases, and limit testing
+
+Format each test case as:
+{
+  "id": "Unique ID like TC001",
+  "title": "Brief descriptive title",
+  "description": "Detailed description of what is being tested",
+  "preconditions": ["List of prerequisites"],
+  "steps": ["Step 1", "Step 2", "Step 3"],
+  "expected_result": "What should happen",
+  "priority": "high/medium/low",
+  "category": "Category name"
+}
+
+Return ONLY this JSON structure:
+{
+  "sanity": [array of test case objects],
+  "regression": [array of test case objects],
+  "positive": [array of test case objects],
+  "negative": [array of test case objects],
+  "edge": [array of test case objects]
+}"""
+
+        user_prompt = f"""Analyze this complete requirement document and generate comprehensive test cases:
+
+DOCUMENT: {document_name}
+
+{document_markdown}
+
+Generate detailed test cases covering all requirements, features, workflows, and business rules mentioned in the document.
+Be thorough and specific. Each test case should be actionable and clear."""
+
+        max_retries = 3
+        retry_delay = 2
+        
+        for attempt in range(max_retries):
+            try:
+                if attempt > 0:
+                    print(f"[INFO] Retry attempt {attempt + 1}/{max_retries} for document {document_name}")
+                    time.sleep(retry_delay * attempt)
+                
+                print(f"[INFO] Calling LLM to generate test cases for {document_name}...")
+                response = self.llm.invoke([
+                    SystemMessage(content=system_prompt),
+                    HumanMessage(content=user_prompt)
+                ])
+                
+                print(f"[INFO] LLM response received ({len(response.content)} chars)")
+                
+                response_text = response.content.strip()
+                
+                if not response_text:
+                    if attempt < max_retries - 1:
+                        print(f"[WARNING] Empty response from LLM, retrying...")
+                        continue
+                    else:
+                        return {
+                            "error": "Empty response from LLM after retries",
+                            "test_cases": {
+                                "sanity": [],
+                                "regression": [],
+                                "positive": [],
+                                "negative": [],
+                                "edge": []
+                            }
+                        }
+                
+                # Extract JSON from response
+                json_text = response_text
+                
+                # Remove markdown code blocks if present
+                if "```json" in response_text:
+                    json_start = response_text.find("```json") + 7
+                    json_end = response_text.find("```", json_start)
+                    if json_end > json_start:
+                        json_text = response_text[json_start:json_end].strip()
+                elif "```" in response_text:
+                    json_start = response_text.find("```") + 3
+                    json_end = response_text.find("```", json_start)
+                    if json_end > json_start:
+                        json_text = response_text[json_start:json_end].strip()
+                
+                # Find JSON object boundaries
+                if not json_text.startswith("{"):
+                    first_brace = json_text.find("{")
+                    if first_brace != -1:
+                        json_text = json_text[first_brace:]
+                
+                if not json_text.endswith("}"):
+                    last_brace = json_text.rfind("}")
+                    if last_brace != -1:
+                        json_text = json_text[:last_brace + 1]
+                
+                test_cases_data = json.loads(json_text)
+                
+                # Validate structure
+                if not isinstance(test_cases_data, dict):
+                    raise ValueError("Response is not a JSON object")
+                
+                # Ensure all categories exist
+                for category in ["sanity", "regression", "positive", "negative", "edge"]:
+                    if category not in test_cases_data:
+                        test_cases_data[category] = []
+                
+                # Count total test cases
+                total_tcs = sum(len(test_cases_data.get(cat, [])) for cat in ["sanity", "regression", "positive", "negative", "edge"])
+                print(f"[SUCCESS] Generated {total_tcs} test cases for {document_name}")
+                
+                return {
+                    "test_cases": test_cases_data,
+                    "document_name": document_name,
+                    "total_test_cases": total_tcs
+                }
+                
+            except json.JSONDecodeError as e:
+                if attempt < max_retries - 1:
+                    print(f"[WARNING] JSON decode error, retrying: {str(e)}")
+                    print(f"[DEBUG] Response preview: {response_text[:500] if 'response_text' in locals() else 'N/A'}")
+                    continue
+                else:
+                    print(f"[ERROR] JSON decode error after {max_retries} attempts: {str(e)}")
+                    return {
+                        "error": f"JSON decode error: {str(e)}",
+                        "test_cases": {
+                            "sanity": [],
+                            "regression": [],
+                            "positive": [],
+                            "negative": [],
+                            "edge": []
+                        }
+                    }
+            except Exception as e:
+                if attempt < max_retries - 1:
+                    print(f"[WARNING] Error generating test cases, retrying: {str(e)}")
+                    continue
+                else:
+                    print(f"[ERROR] Failed to generate test cases after {max_retries} attempts: {str(e)}")
+                    return {
+                        "error": str(e),
+                        "test_cases": {
+                            "sanity": [],
+                            "regression": [],
+                            "positive": [],
+                            "negative": [],
+                            "edge": []
+                        }
+                    }
     
     def generate_test_cases_for_chunk(self, chunk: Dict[str, Any], chunk_index: int) -> Dict[str, Any]:
         """
@@ -268,26 +458,26 @@ Generate test cases covering all categories. Be specific and actionable."""
         progress_callback: Optional[callable] = None
     ) -> Dict[str, Any]:
         """
-        Process a document and generate test cases for all chunks
+        Process a document and generate test cases from full markdown content
         
         Args:
             journey_name: Name of the journey
             document_filename: Name of the document file
-            parse_result: Parse result containing chunks
+            parse_result: Parse result containing markdown
             document_type: Type of document (optional)
-            progress_callback: Optional callback function(chunk_index, total_chunks) for progress updates
+            progress_callback: Optional callback function(current_step, total_steps) for progress updates
             
         Returns:
             Dict containing all generated test cases and metadata
         """
-        chunks = parse_result.get("chunks", [])
+        # Extract full markdown from parse result
+        document_markdown = parse_result.get("markdown", "")
         
-        if not chunks:
-            print(f"[WARNING] No chunks found in parse result for {document_filename}")
+        if not document_markdown:
+            print(f"[WARNING] No markdown found in parse result for {document_filename}")
             return {
                 "journey_name": journey_name,
                 "document_filename": document_filename,
-                "total_chunks": 0,
                 "test_cases": {
                     "sanity": [],
                     "regression": [],
@@ -307,34 +497,39 @@ Generate test cases covering all categories. Be specific and actionable."""
                 }
             }
         
-        print(f"[INFO] Generating test cases for {len(chunks)} chunks from {document_filename}")
+        print(f"[INFO] Generating test cases from full document: {document_filename}")
         
-        # Generate test cases for each chunk
-        chunk_results = []
-        for i, chunk in enumerate(chunks):
-            print(f"[INFO] Processing chunk {i + 1}/{len(chunks)}...")
-            
-            # Call progress callback if provided
-            if progress_callback:
-                progress_callback(i, len(chunks))
-            
-            result = self.generate_test_cases_for_chunk(chunk, i)
-            chunk_results.append(result)
+        # Update progress - step 1: analyzing document
+        if progress_callback:
+            progress_callback(0, 3)
         
-        # Merge all test cases
-        merged_test_cases = self.merge_test_cases(chunk_results)
+        # Generate test cases from full document
+        result = self.generate_test_cases_from_document(document_markdown, document_filename)
+        
+        # Update progress - step 2: organizing test cases
+        if progress_callback:
+            progress_callback(1, 3)
+        
+        test_cases_data = result.get("test_cases", {})
+        error = result.get("error")
+        
+        if error:
+            print(f"[WARNING] Error generating test cases: {error}")
         
         # Calculate summary
         summary = {
-            "total_test_cases": sum(len(merged_test_cases[cat]) for cat in merged_test_cases),
+            "total_test_cases": sum(len(test_cases_data.get(cat, [])) for cat in ["sanity", "regression", "positive", "negative", "edge"]),
             "by_category": {
-                cat: len(merged_test_cases[cat]) for cat in merged_test_cases
+                cat: len(test_cases_data.get(cat, [])) for cat in ["sanity", "regression", "positive", "negative", "edge"]
             }
         }
         
-        print(f"[INFO] Generated {summary['total_test_cases']} test cases")
+        print(f"[INFO] Generated {summary['total_test_cases']} test cases for {document_filename}")
         
-        # Get absolute path to backend directory
+        # Update progress - step 3: saving results
+        if progress_callback:
+            progress_callback(2, 3)
+        
         # Save test cases for this document using centralized path config
         if document_type:
             save_dir = DOCUMENTS_DIR / "journeys" / journey_name / document_type
@@ -346,22 +541,21 @@ Generate test cases covering all categories. Be specific and actionable."""
         base_filename = os.path.splitext(document_filename)[0]
         test_cases_path = save_dir / f"{base_filename}_test_cases.json"
         
-        result = {
+        final_result = {
             "journey_name": journey_name,
             "document_filename": document_filename,
             "document_type": document_type,
-            "total_chunks": len(chunks),
-            "test_cases": merged_test_cases,
-            "chunk_results": chunk_results,
-            "summary": summary
+            "test_cases": test_cases_data,
+            "summary": summary,
+            "error": error
         }
         
         with open(test_cases_path, 'w') as f:
-            json.dump(result, f, indent=2)
+            json.dump(final_result, f, indent=2)
         
         print(f"[INFO] Test cases saved to: {test_cases_path}")
         
-        return result
+        return final_result
     
     def merge_journey_test_cases(self, journey_name: str) -> Dict[str, Any]:
         """

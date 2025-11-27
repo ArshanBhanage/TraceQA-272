@@ -5,6 +5,12 @@ import { useState, useEffect, useRef } from "react";
 interface Message {
   role: "user" | "assistant";
   content: string;
+  processingStatus?: {
+    jobId: string;
+    stage: string;
+    status: string;
+    message: string;
+  };
 }
 
 interface ChatState {
@@ -29,6 +35,9 @@ export default function Chatbot({ onJourneyChange }: ChatbotProps) {
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const sessionId = "user-session-1";
+  const [processingJobId, setProcessingJobId] = useState<string | null>(null);
+  const [processingStage, setProcessingStage] = useState<string>("");
+  const pollingIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -37,6 +46,16 @@ export default function Chatbot({ onJourneyChange }: ChatbotProps) {
   useEffect(() => {
     scrollToBottom();
   }, [messages]);
+
+  useEffect(() => {
+    // Cleanup polling on unmount
+    return () => {
+      if (pollingIntervalRef.current) {
+        clearInterval(pollingIntervalRef.current);
+        pollingIntervalRef.current = null;
+      }
+    };
+  }, []);
 
   useEffect(() => {
     // Get initial message from backend
@@ -166,12 +185,25 @@ export default function Chatbot({ onJourneyChange }: ChatbotProps) {
       } else {
         const uploadMessage: Message = {
           role: "assistant",
-          content: data.message || "✅ Got your file. I'm processing it now — this can take a few minutes. I'll send the results as soon as they're ready.",
+          content: data.message || "✅ Got your file. Document is being parsed now.",
+          processingStatus: {
+            jobId: data.job_id,
+            stage: "parsing",
+            status: "processing",
+            message: "Parsing document..."
+          }
         };
         setMessages((prev) => [...prev, uploadMessage]);
         
+        // Update chat state to move away from upload step
+        setChatState(prev => ({
+          ...prev,
+          conversationStep: "document_uploaded"
+        }));
+        
         const jobId = data.job_id;
         if (jobId) {
+          setProcessingJobId(jobId);
           pollProcessingStatus(jobId);
         }
       }
@@ -197,55 +229,113 @@ export default function Chatbot({ onJourneyChange }: ChatbotProps) {
         const response = await fetch(`http://localhost:8000/api/processing-status/${jobId}`);
         const data = await response.json();
 
-        if (data.status === 'completed') {
-          const completionMessage: Message = {
-            role: "assistant",
-            content: data.message,
-          };
-          setMessages((prev) => [...prev, completionMessage]);
-          
-          try {
-            const chatResponse = await fetch("http://localhost:8000/api/chat", {
-              method: "POST",
-              headers: {
-                "Content-Type": "application/json",
-              },
-              body: JSON.stringify({ message: "", session_id: sessionId }),
-            });
-            
-            const chatData = await chatResponse.json();
-            const nextMessage: Message = {
-              role: "assistant",
-              content: chatData.response,
-            };
-            setMessages((prev) => [...prev, nextMessage]);
-            
-            updateChatState(chatData);
-          } catch (err) {
-            console.error("Error getting next step:", err);
+        // Update the processing message with current status
+        setMessages((prev) => {
+          const lastMessage = prev[prev.length - 1];
+          if (lastMessage.processingStatus?.jobId === jobId) {
+            return [
+              ...prev.slice(0, -1),
+              {
+                ...lastMessage,
+                processingStatus: {
+                  jobId: jobId,
+                  stage: data.stage || 'processing',
+                  status: data.status || 'processing',
+                  message: data.message || 'Processing...'
+                }
+              }
+            ];
           }
+          return prev;
+        });
+
+        setProcessingStage(data.stage || 'processing');
+
+        if (data.status === 'completed') {
+          // Clear polling
+          if (pollingIntervalRef.current) {
+            clearInterval(pollingIntervalRef.current);
+            pollingIntervalRef.current = null;
+          }
+          
+          setProcessingJobId(null);
+          setProcessingStage('');
+          
+          // Update chat state to allow normal conversation
+          setChatState(prev => ({
+            ...prev,
+            conversationStep: "conversation"
+          }));
+          
+          // Update final message
+          setMessages((prev) => {
+            const lastMessage = prev[prev.length - 1];
+            if (lastMessage.processingStatus?.jobId === jobId) {
+              return [
+                ...prev.slice(0, -1),
+                {
+                  role: "assistant",
+                  content: data.message || "Document parsed successfully! You can now generate test cases from the Test Cases view."
+                }
+              ];
+            }
+            return prev;
+          });
         } else if (data.status === 'failed') {
-          const errorMessage: Message = {
-            role: "assistant",
-            content: data.message || "Processing failed. Please try again.",
-          };
-          setMessages((prev) => [...prev, errorMessage]);
-        } else if (data.status === 'processing' && attempts < maxAttempts) {
+          // Clear polling
+          if (pollingIntervalRef.current) {
+            clearInterval(pollingIntervalRef.current);
+            pollingIntervalRef.current = null;
+          }
+          
+          setProcessingJobId(null);
+          setProcessingStage('');
+          
+          // Update chat state to allow retry
+          setChatState(prev => ({
+            ...prev,
+            conversationStep: "conversation"
+          }));
+          
+          setMessages((prev) => {
+            const lastMessage = prev[prev.length - 1];
+            if (lastMessage.processingStatus?.jobId === jobId) {
+              return [
+                ...prev.slice(0, -1),
+                {
+                  role: "assistant",
+                  content: data.message || "Error processing document."
+                }
+              ];
+            }
+            return prev;
+          });
+        } else {
           attempts++;
-          setTimeout(poll, 5000);
-        } else if (attempts >= maxAttempts) {
-          const timeoutMessage: Message = {
-            role: "assistant",
-            content: "⏱️ Processing is taking longer than expected. Please check back later or try uploading the document again.",
-          };
-          setMessages((prev) => [...prev, timeoutMessage]);
+          if (attempts >= maxAttempts) {
+            if (pollingIntervalRef.current) {
+              clearInterval(pollingIntervalRef.current);
+              pollingIntervalRef.current = null;
+            }
+            setProcessingJobId(null);
+          }
         }
       } catch (error) {
         console.error("Error polling status:", error);
+        attempts++;
+        if (attempts >= maxAttempts && pollingIntervalRef.current) {
+          clearInterval(pollingIntervalRef.current);
+          pollingIntervalRef.current = null;
+          setProcessingJobId(null);
+        }
       }
     };
 
-    setTimeout(poll, 3000);
+    // Initial poll
+    poll();
+    
+    // Set up interval for subsequent polls
+    pollingIntervalRef.current = setInterval(poll, 2000);
   };
 
   const handleKeyPress = (e: React.KeyboardEvent) => {
@@ -256,6 +346,17 @@ export default function Chatbot({ onJourneyChange }: ChatbotProps) {
   };
 
   const startNewChat = async () => {
+    // Clear any ongoing polling
+    if (pollingIntervalRef.current) {
+      clearInterval(pollingIntervalRef.current);
+      pollingIntervalRef.current = null;
+    }
+    
+    // Reset all processing state
+    setProcessingJobId(null);
+    setProcessingStage("");
+    setSelectedFile(null);
+    
     setIsLoading(true);
     try {
       await fetch("http://localhost:8000/api/reset", {
@@ -263,7 +364,7 @@ export default function Chatbot({ onJourneyChange }: ChatbotProps) {
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify(sessionId),
+        body: JSON.stringify({ session_id: sessionId }),
       });
       
       const response = await fetch("http://localhost:8000/api/chat", {
@@ -324,6 +425,86 @@ export default function Chatbot({ onJourneyChange }: ChatbotProps) {
               }`}
             >
               <p className="text-sm whitespace-pre-wrap">{message.content}</p>
+              
+              {/* Processing Progress Indicator */}
+              {message.processingStatus && (
+                <div className="mt-3 pt-3 border-t border-gray-700">
+                  <div className="flex items-center space-x-3">
+                    {/* Parsing Stage */}
+                    <div className="flex flex-col items-center">
+                      <div className={`w-8 h-8 rounded-full flex items-center justify-center transition-all ${
+                        message.processingStatus.stage === 'parsing' && message.processingStatus.status === 'processing'
+                          ? 'bg-blue-600 animate-pulse'
+                          : message.processingStatus.stage === 'parsed' || message.processingStatus.status === 'completed'
+                          ? 'bg-green-600'
+                          : 'bg-gray-600'
+                      }`}>
+                        {message.processingStatus.stage === 'parsed' || message.processingStatus.status === 'completed' ? (
+                          <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                          </svg>
+                        ) : (
+                          <span className="text-xs text-white font-bold">1</span>
+                        )}
+                      </div>
+                      <span className="text-xs mt-1 text-gray-400">Parsing</span>
+                    </div>
+
+                    {/* Connector Line */}
+                    <div className={`h-0.5 w-12 ${
+                      message.processingStatus.stage === 'parsed' || message.processingStatus.status === 'completed'
+                        ? 'bg-green-600'
+                        : 'bg-gray-600'
+                    }`}></div>
+
+                    {/* Parsed Stage */}
+                    <div className="flex flex-col items-center">
+                      <div className={`w-8 h-8 rounded-full flex items-center justify-center transition-all ${
+                        message.processingStatus.stage === 'parsed' && message.processingStatus.status === 'processing'
+                          ? 'bg-blue-600 animate-pulse'
+                          : message.processingStatus.status === 'completed'
+                          ? 'bg-green-600'
+                          : 'bg-gray-600'
+                      }`}>
+                        {message.processingStatus.status === 'completed' ? (
+                          <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                          </svg>
+                        ) : (
+                          <span className="text-xs text-white font-bold">2</span>
+                        )}
+                      </div>
+                      <span className="text-xs mt-1 text-gray-400">Parsed</span>
+                    </div>
+
+                    {/* Connector Line */}
+                    <div className={`h-0.5 w-12 ${
+                      message.processingStatus.status === 'completed'
+                        ? 'bg-green-600'
+                        : 'bg-gray-600'
+                    }`}></div>
+
+                    {/* Ready Stage */}
+                    <div className="flex flex-col items-center">
+                      <div className={`w-8 h-8 rounded-full flex items-center justify-center transition-all ${
+                        message.processingStatus.status === 'completed'
+                          ? 'bg-green-600'
+                          : 'bg-gray-600'
+                      }`}>
+                        {message.processingStatus.status === 'completed' ? (
+                          <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                          </svg>
+                        ) : (
+                          <span className="text-xs text-white font-bold">3</span>
+                        )}
+                      </div>
+                      <span className="text-xs mt-1 text-gray-400">Ready</span>
+                    </div>
+                  </div>
+                  <p className="text-xs text-gray-400 mt-3">{message.processingStatus.message}</p>
+                </div>
+              )}
             </div>
           </div>
         ))}
