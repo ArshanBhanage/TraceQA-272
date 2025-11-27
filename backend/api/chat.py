@@ -301,6 +301,61 @@ async def get_test_cases(journey_name: str):
         }
 
 
+@router.get("/journeys")
+async def get_journeys():
+    """Get list of all available journeys"""
+    try:
+        journeys_dir = DOCUMENTS_DIR / "journeys"
+        
+        if not journeys_dir.exists():
+            return {
+                "success": False,
+                "message": "Journeys directory not found",
+                "journeys": []
+            }
+        
+        # Get all directories in journeys folder
+        journeys = []
+        for item in journeys_dir.iterdir():
+            if item.is_dir():
+                # Check if merged test cases file exists
+                merged_file = item / f"{item.name}_merged_test_cases.json"
+                has_test_cases = merged_file.exists()
+                
+                # Get test case count if available
+                test_case_count = 0
+                if has_test_cases:
+                    try:
+                        with open(merged_file, 'r') as f:
+                            data = json.load(f)
+                            test_case_count = data.get("summary", {}).get("total_test_cases", 0)
+                    except:
+                        pass
+                
+                journeys.append({
+                    "name": item.name,
+                    "has_test_cases": has_test_cases,
+                    "test_case_count": test_case_count
+                })
+        
+        # Sort by name
+        journeys.sort(key=lambda x: x["name"])
+        
+        return {
+            "success": True,
+            "journeys": journeys,
+            "total": len(journeys)
+        }
+    
+    except Exception as e:
+        print(f"[ERROR] Error loading journeys: {str(e)}")
+        return {
+            "success": False,
+            "message": f"Error loading journeys: {str(e)}",
+            "journeys": []
+        }
+
+
 @router.post("/reset")
 async def reset_session(session_id: str = "default"):
     """Reset conversation session"""
