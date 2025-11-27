@@ -25,6 +25,7 @@ class AgentState(TypedDict):
 # Initialize OpenRouter LLM via LangChain
 def get_llm():
     """Lazy load LLM to ensure env vars are loaded"""
+    print("Initializing LLM with model:", os.getenv("DEFAULT_MODEL", "openrouter/bert-nebulon-alpha"))
     return ChatOpenAI(
         model=os.getenv("DEFAULT_MODEL", "openrouter/bert-nebulon-alpha"),
         # model=os.getenv("DEFAULT_MODEL"),
@@ -59,11 +60,13 @@ def chatbot_agent_node(state: AgentState):
 Your role is to guide users through managing journeys and their documents.
 Be professional, clear, and concise in your responses.
 
-IMPORTANT FORMATTING RULES:
-- Use clear headings and bullet points where appropriate
-- Keep responses well-structured and easy to read
-- Use numbered lists for options (1., 2., etc.)
-- Add appropriate spacing between sections
+CRITICAL FORMATTING RULES - FOLLOW EXACTLY:
+- Always format text as plain text ONLY
+- NEVER use asterisks (*), double asterisks (**), underscores (_), double underscores (__), or tildes (~)
+- Do NOT use markdown formatting syntax of any kind
+- Do NOT use asterisks to denote actions or emphasis
+- Use simple numbered lists for options (1., 2., etc.) without any special characters
+- Add appropriate spacing between sections using line breaks only
 - Be conversational yet professional
 
 Always remind users they can type 'cancel' or 'exit' at any time to restart the conversation.

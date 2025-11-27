@@ -29,6 +29,10 @@ export default function TestCasesView({ journeyName }: TestCasesViewProps) {
   const [availableJourneys, setAvailableJourneys] = useState<string[]>([]);
   const [selectedJourney, setSelectedJourney] = useState<string | null>(null);
   const [viewMode, setViewMode] = useState<"cards" | "table">("cards");
+  const [isGenerating, setIsGenerating] = useState(false);
+  const [generationJobId, setGenerationJobId] = useState<string | null>(null);
+  const [generationStatus, setGenerationStatus] = useState<string>("");
+  const [journeyInfo, setJourneyInfo] = useState<any>(null);
 
   useEffect(() => {
     // Load available journeys on mount
@@ -60,6 +64,13 @@ export default function TestCasesView({ journeyName }: TestCasesViewProps) {
           // Extract journey names from the response
           const journeyNames = data.journeys.map((j: any) => j.name);
           setAvailableJourneys(journeyNames);
+          
+          // Store full journey info
+          const activeJourney = journeyName || selectedJourney;
+          if (activeJourney) {
+            const info = data.journeys.find((j: any) => j.name === activeJourney);
+            setJourneyInfo(info);
+          }
           
           // Auto-select first journey if no journey is selected
           if (!journeyName && !selectedJourney && journeyNames.length > 0) {
@@ -100,6 +111,84 @@ export default function TestCasesView({ journeyName }: TestCasesViewProps) {
     tc.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
     tc.description.toLowerCase().includes(searchTerm.toLowerCase())
   );
+
+  const generateTestCases = async () => {
+    const activeJourney = journeyName || selectedJourney;
+    if (!activeJourney) return;
+
+    setIsGenerating(true);
+    setGenerationStatus("Starting test case generation...");
+
+    try {
+      const response = await fetch(`http://localhost:8000/api/generate-test-cases/${activeJourney}`, {
+        method: 'POST'
+      });
+
+      const data = await response.json();
+
+      if (data.success) {
+        setGenerationJobId(data.job_id);
+        pollGenerationStatus(data.job_id);
+      } else {
+        setGenerationStatus(data.message || "Failed to start generation");
+        setIsGenerating(false);
+      }
+    } catch (error) {
+      console.error("Error generating test cases:", error);
+      setGenerationStatus("Error starting test case generation");
+      setIsGenerating(false);
+    }
+  };
+
+  const pollGenerationStatus = async (jobId: string) => {
+    const maxAttempts = 120; // 10 minutes max
+    let attempts = 0;
+
+    const poll = async () => {
+      try {
+        const response = await fetch(`http://localhost:8000/api/processing-status/${jobId}`);
+        const data = await response.json();
+
+        if (data.status === 'completed') {
+          setGenerationStatus(data.message || "Test cases generated successfully!");
+          setIsGenerating(false);
+          setGenerationJobId(null);
+          // Reload test cases and journey info
+          const activeJourney = journeyName || selectedJourney;
+          if (activeJourney) {
+            loadTestCases(activeJourney);
+            loadAvailableJourneys();
+          }
+        } else if (data.status === 'failed') {
+          setGenerationStatus(data.message || "Test case generation failed");
+          setIsGenerating(false);
+          setGenerationJobId(null);
+        } else if (data.status === 'processing') {
+          setGenerationStatus(data.message || "Processing...");
+          attempts++;
+          if (attempts < maxAttempts) {
+            setTimeout(poll, 3000); // Poll every 3 seconds
+          } else {
+            setGenerationStatus("Generation is taking longer than expected...");
+            setIsGenerating(false);
+          }
+        } else {
+          setGenerationStatus("Unknown status");
+          setIsGenerating(false);
+        }
+      } catch (error) {
+        console.error("Error polling status:", error);
+        attempts++;
+        if (attempts < maxAttempts) {
+          setTimeout(poll, 3000);
+        } else {
+          setIsGenerating(false);
+        }
+      }
+    };
+
+    poll();
+  };
 
   const exportToExcel = () => {
     const activeJourney = journeyName || selectedJourney;
@@ -203,6 +292,31 @@ export default function TestCasesView({ journeyName }: TestCasesViewProps) {
               </button>
             </div>
 
+            {/* Generate Test Cases Button */}
+            <button
+              onClick={generateTestCases}
+              disabled={isGenerating || !journeyInfo?.has_parsed_docs || isLoading || (!journeyName && !selectedJourney)}
+              className="px-4 py-2 bg-purple-600 hover:bg-purple-700 disabled:bg-gray-700 disabled:cursor-not-allowed text-white rounded-lg transition-colors text-sm font-medium flex items-center space-x-2"
+              title={!journeyInfo?.has_parsed_docs ? "No parsed documents available. Upload documents first." : "Generate test cases from parsed documents"}
+            >
+              {isGenerating ? (
+                <>
+                  <svg className="animate-spin h-4 w-4" fill="none" viewBox="0 0 24 24">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                  </svg>
+                  <span>Generating...</span>
+                </>
+              ) : (
+                <>
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                  </svg>
+                  <span>Generate Test Cases</span>
+                </>
+              )}
+            </button>
+
             {/* Export Button */}
             <button
               onClick={exportToExcel}
@@ -250,9 +364,37 @@ export default function TestCasesView({ journeyName }: TestCasesViewProps) {
             className="w-full pl-10 pr-4 py-2 bg-gray-800 border border-gray-700 rounded-lg text-gray-100 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
           />
         </div>
+
+        {/* Generation Status */}
+        {(isGenerating || generationStatus) && (
+          <div className={`mt-4 p-3 rounded-lg ${isGenerating ? 'bg-purple-900/30 border border-purple-700' : 'bg-green-900/30 border border-green-700'}`}>
+            <p className="text-sm text-gray-200">{generationStatus}</p>
+          </div>
+        )}
+
+        {/* Journey Info */}
+        {journeyInfo && (selectedJourney || journeyName) && (
+          <div className="mt-4 flex items-center space-x-4 text-sm">
+            {journeyInfo.has_parsed_docs && (
+              <span className="px-3 py-1 bg-blue-900/30 text-blue-300 rounded-lg border border-blue-700">
+                📄 {journeyInfo.parsed_doc_count} document{journeyInfo.parsed_doc_count !== 1 ? 's' : ''} parsed
+              </span>
+            )}
+            {journeyInfo.has_test_cases && (
+              <span className="px-3 py-1 bg-green-900/30 text-green-300 rounded-lg border border-green-700">
+                ✅ {journeyInfo.test_case_count} test case{journeyInfo.test_case_count !== 1 ? 's' : ''}
+              </span>
+            )}
+            {!journeyInfo.has_parsed_docs && (
+              <span className="px-3 py-1 bg-yellow-900/30 text-yellow-300 rounded-lg border border-yellow-700">
+                ⚠️ No documents uploaded yet
+              </span>
+            )}
+          </div>
+        )}
       </div>
 
-      {/* Content */}
+      {/* Main Content */}
       <div className="flex-1 overflow-hidden">
         {isLoading ? (
           <div className="h-full flex items-center justify-center">

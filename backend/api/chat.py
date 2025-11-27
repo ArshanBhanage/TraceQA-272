@@ -9,7 +9,7 @@ import os
 import shutil
 import asyncio
 import json
-from typing import Optional
+from typing import Optional, Dict, Any
 
 router = APIRouter()
 
@@ -85,8 +85,11 @@ async def chat(request: ChatRequest):
     ai_messages = [msg for msg in result["messages"] if hasattr(msg, "content")]
     response_text = ai_messages[-1].content if ai_messages else "Error processing request"
     
-    # Clean up markdown formatting (remove ** for bold)
-    response_text = response_text.replace("**", "")
+    # Clean up markdown formatting
+    response_text = response_text.replace("**", "")  # Remove bold
+    response_text = response_text.replace("__", "")  # Remove underline
+    response_text = response_text.replace("*", "")   # Remove italic (single asterisk)
+    response_text = response_text.replace("_", " ")  # Replace underscores with spaces
     
     return ChatResponse(
         response=response_text,
@@ -96,14 +99,87 @@ async def chat(request: ChatRequest):
     )
 
 
-def process_document_background(
+async def generate_test_cases_async(
+    job_id: str,
+    filename: str,
+    journey_name: str,
+    parse_result: Dict[str, Any],
+    document_type: Optional[str],
+    session_id: str
+):
+    """Async task to generate test cases in background"""
+    try:
+        chunks_count = len(parse_result.get("chunks", []))
+        
+        processing_status[job_id]["stage"] = "generating_tests"
+        processing_status[job_id]["message"] = f"Generating test cases for {chunks_count} chunks..."
+        processing_status[job_id]["chunks_processed"] = 0
+        processing_status[job_id]["total_chunks"] = chunks_count
+        
+        # Progress callback to update status
+        def update_progress(chunk_index: int, total_chunks: int):
+            processing_status[job_id]["chunks_processed"] = chunk_index + 1
+            processing_status[job_id]["message"] = f"Processing chunk {chunk_index + 1}/{total_chunks}..."
+        
+        # Generate test cases from chunks
+        print(f"[INFO] Starting async test case generation for {filename}")
+        test_case_result = await asyncio.to_thread(
+            test_case_generator.process_document,
+            journey_name=journey_name,
+            document_filename=filename,
+            parse_result=parse_result,
+            document_type=document_type,
+            progress_callback=update_progress
+        )
+        
+        total_test_cases = test_case_result.get("summary", {}).get("total_test_cases", 0)
+        print(f"[INFO] Generated {total_test_cases} test cases for {filename}")
+        
+        processing_status[job_id]["stage"] = "merging"
+        processing_status[job_id]["message"] = f"Generated {total_test_cases} test cases. Merging journey results..."
+        
+        # Merge test cases for entire journey
+        print(f"[INFO] Merging all test cases for journey: {journey_name}")
+        merged_result = await asyncio.to_thread(
+            test_case_generator.merge_journey_test_cases,
+            journey_name
+        )
+        total_merged_test_cases = merged_result.get("summary", {}).get("total_test_cases", 0)
+        print(f"[INFO] Total test cases for journey '{journey_name}': {total_merged_test_cases}")
+        
+        # Update status to completed
+        processing_status[job_id] = {
+            "status": "completed",
+            "stage": "done",
+            "message": f"Processing complete!\n\nDocument: {filename}\nChunks extracted: {chunks_count}\nTest cases generated: {total_test_cases}\nTotal journey test cases: {total_merged_test_cases}",
+            "chunks_count": chunks_count,
+            "test_cases": total_test_cases,
+            "total_journey_test_cases": total_merged_test_cases
+        }
+        
+        # Update conversation state
+        if session_id in conversation_states:
+            conversation_states[session_id]["conversation_step"] = "document_uploaded"
+        
+    except Exception as e:
+        error_msg = f"Error generating test cases: {str(e)}"
+        print(f"[ERROR] Test case generation failed: {str(e)}")
+        processing_status[job_id] = {
+            "status": "failed",
+            "stage": "error",
+            "message": error_msg,
+            "error": str(e)
+        }
+
+
+async def process_document_async(
     file_path: str,
     filename: str,
     journey_name: str,
     document_type: Optional[str],
     session_id: str
 ):
-    """Background task to process document with Landing AI and generate test cases"""
+    """Async task to parse document only (no test case generation)"""
     job_id = f"{session_id}_{filename}"
     
     try:
@@ -113,8 +189,10 @@ def process_document_background(
             "message": "Parsing document with Landing AI..."
         }
         
-        # Process document with Landing AI
-        landing_ai_result = landing_ai_agent.process_document(
+        # Process document with Landing AI (parsing only - fast operation)
+        # Run in thread pool to avoid blocking
+        landing_ai_result = await asyncio.to_thread(
+            landing_ai_agent.process_document,
             document_path=file_path,
             journey_name=journey_name,
             document_type=document_type
@@ -122,59 +200,18 @@ def process_document_background(
         
         chunks_count = len(landing_ai_result.get("chunks", []))
         
-        processing_status[job_id] = {
-            "status": "processing",
-            "stage": "generating_tests",
-            "message": f"Parsed {chunks_count} chunks. Generating test cases..."
-        }
-        
-        # Generate test cases from chunks
-        print(f"[INFO] Starting test case generation for {filename}")
-        test_case_result = test_case_generator.process_document(
-            journey_name=journey_name,
-            document_filename=filename,
-            parse_result=landing_ai_result.get("parse_result", {}),
-            document_type=document_type
-        )
-        
-        total_test_cases = test_case_result.get("summary", {}).get("total_test_cases", 0)
-        print(f"[INFO] Generated {total_test_cases} test cases for {filename}")
-        
-        processing_status[job_id] = {
-            "status": "processing",
-            "stage": "merging",
-            "message": f"Generated {total_test_cases} test cases. Merging journey results..."
-        }
-        
-        # Merge test cases for entire journey
-        print(f"[INFO] Merging all test cases for journey: {journey_name}")
-        merged_result = test_case_generator.merge_journey_test_cases(journey_name)
-        total_merged_test_cases = merged_result.get("summary", {}).get("total_test_cases", 0)
-        print(f"[INFO] Total test cases for journey '{journey_name}': {total_merged_test_cases}")
-        
-        # Update status to completed
+        # Update status to completed (parsing only)
         processing_status[job_id] = {
             "status": "completed",
-            "stage": "done",
-            "message": f"✅ Processing complete!\n\n📄 Document: {filename}\n📊 Chunks extracted: {chunks_count}\n🧪 Test cases generated: {total_test_cases}\n📋 Total journey test cases: {total_merged_test_cases}",
-            "chunks_count": chunks_count,
-            "test_cases": total_test_cases,
-            "total_journey_test_cases": total_merged_test_cases
+            "stage": "parsed",
+            "message": f"Document parsed successfully! Extracted {chunks_count} chunks.\n\nYou can now generate test cases from the Test Cases view.",
+            "chunks_count": chunks_count
         }
         
-        # Update conversation state
-        if session_id in conversation_states:
-            conversation_states[session_id] = {
-                "messages": [AIMessage(content=processing_status[job_id]["message"])],
-                "user_input": "",
-                "selected_option": None,
-                "journey_name": journey_name,
-                "conversation_step": "document_uploaded",
-                "document_type": document_type
-            }
+        print(f"[INFO] Document parsed successfully: {chunks_count} chunks.")
         
     except Exception as e:
-        error_msg = f"❌ Error processing document: {str(e)}"
+        error_msg = f"Error processing document: {str(e)}"
         print(f"[ERROR] Background processing failed: {str(e)}")
         processing_status[job_id] = {
             "status": "failed",
@@ -182,17 +219,6 @@ def process_document_background(
             "message": error_msg,
             "error": str(e)
         }
-        
-        # Update conversation state with error
-        if session_id in conversation_states:
-            conversation_states[session_id] = {
-                "messages": [AIMessage(content=error_msg)],
-                "user_input": "",
-                "selected_option": None,
-                "journey_name": journey_name,
-                "conversation_step": "document_uploaded",
-                "document_type": document_type
-            }
 
 
 @router.post("/upload")
@@ -233,8 +259,7 @@ async def upload_document(
     
     # Fire and forget - true background execution using asyncio
     asyncio.create_task(
-        asyncio.to_thread(
-            process_document_background,
+        process_document_async(
             str(file_path),
             file.filename,
             journey_name,
@@ -246,7 +271,7 @@ async def upload_document(
     # Return immediate response
     return {
         "success": True,
-        "message": "✅ Got your file. I'm processing it now — this can take a few minutes. I'll send the results as soon as they're ready.",
+        "message": "✅ Got your file. Document is being parsed now. Once complete, you can generate test cases from the Test Cases view.",
         "filename": file.filename,
         "journey_name": journey_name,
         "job_id": job_id
@@ -322,6 +347,10 @@ async def get_journeys():
                 merged_file = item / f"{item.name}_merged_test_cases.json"
                 has_test_cases = merged_file.exists()
                 
+                # Check for parsed documents
+                parse_files = list(item.glob("**/*_parse_result.json"))
+                has_parsed_docs = len(parse_files) > 0
+                
                 # Get test case count if available
                 test_case_count = 0
                 if has_test_cases:
@@ -335,6 +364,8 @@ async def get_journeys():
                 journeys.append({
                     "name": item.name,
                     "has_test_cases": has_test_cases,
+                    "has_parsed_docs": has_parsed_docs,
+                    "parsed_doc_count": len(parse_files),
                     "test_case_count": test_case_count
                 })
         
@@ -363,3 +394,132 @@ async def reset_session(session_id: str = "default"):
         del conversation_states[session_id]
     
     return {"message": "Session reset successfully"}
+
+
+@router.post("/generate-test-cases/{journey_name}")
+async def generate_test_cases_for_journey(journey_name: str):
+    """Generate test cases for all parsed documents in a journey"""
+    try:
+        journey_path = DOCUMENTS_DIR / "journeys" / journey_name
+        
+        if not journey_path.exists():
+            return {
+                "success": False,
+                "message": f"Journey '{journey_name}' not found"
+            }
+        
+        # Find all parse result files in the journey
+        parse_files = list(journey_path.glob("**/*_parse_result.json"))
+        
+        if not parse_files:
+            return {
+                "success": False,
+                "message": f"No parsed documents found in journey '{journey_name}'. Please upload and parse documents first."
+            }
+        
+        # Create a unique job ID for this generation
+        job_id = f"generate_{journey_name}_{asyncio.get_event_loop().time()}"
+        
+        processing_status[job_id] = {
+            "status": "processing",
+            "stage": "starting",
+            "message": f"Starting test case generation for {len(parse_files)} document(s)...",
+            "total_documents": len(parse_files),
+            "processed_documents": 0
+        }
+        
+        # Start async test case generation
+        asyncio.create_task(
+            generate_all_test_cases_for_journey(
+                job_id=job_id,
+                journey_name=journey_name,
+                parse_files=parse_files
+            )
+        )
+        
+        return {
+            "success": True,
+            "message": f"Test case generation started for {len(parse_files)} document(s)",
+            "job_id": job_id,
+            "total_documents": len(parse_files)
+        }
+        
+    except Exception as e:
+        print(f"[ERROR] Error starting test case generation: {str(e)}")
+        return {
+            "success": False,
+            "message": f"Error: {str(e)}"
+        }
+
+
+async def generate_all_test_cases_for_journey(
+    job_id: str,
+    journey_name: str,
+    parse_files: list
+):
+    """Generate test cases for all documents in a journey"""
+    try:
+        total_docs = len(parse_files)
+        
+        for idx, parse_file in enumerate(parse_files):
+            # Update progress
+            processing_status[job_id]["processed_documents"] = idx
+            processing_status[job_id]["message"] = f"Generating test cases for document {idx + 1}/{total_docs}..."
+            
+            # Load parse result
+            with open(parse_file, 'r') as f:
+                parse_result = json.load(f)
+            
+            # Extract document filename from parse file name
+            filename = parse_file.name.replace("_parse_result.json", ".pdf")
+            
+            # Determine document type from folder structure
+            document_type = None
+            if parse_file.parent != DOCUMENTS_DIR / "journeys" / journey_name:
+                document_type = parse_file.parent.name
+            
+            # Progress callback
+            def update_progress(chunk_index: int, total_chunks: int):
+                processing_status[job_id]["message"] = f"Document {idx + 1}/{total_docs} - Processing chunk {chunk_index + 1}/{total_chunks}..."
+            
+            # Generate test cases for this document
+            await asyncio.to_thread(
+                test_case_generator.process_document,
+                journey_name=journey_name,
+                document_filename=filename,
+                parse_result=parse_result,
+                document_type=document_type,
+                progress_callback=update_progress
+            )
+        
+        # Merge all test cases
+        processing_status[job_id]["stage"] = "merging"
+        processing_status[job_id]["message"] = "Merging all test cases..."
+        
+        merged_result = await asyncio.to_thread(
+            test_case_generator.merge_journey_test_cases,
+            journey_name
+        )
+        
+        total_test_cases = merged_result.get("summary", {}).get("total_test_cases", 0)
+        
+        # Update to completed
+        processing_status[job_id] = {
+            "status": "completed",
+            "stage": "done",
+            "message": f"Test case generation complete!\n\nProcessed {total_docs} document(s)\nGenerated {total_test_cases} test cases",
+            "total_documents": total_docs,
+            "total_test_cases": total_test_cases
+        }
+        
+        print(f"[INFO] Test case generation completed for journey '{journey_name}': {total_test_cases} test cases")
+        
+    except Exception as e:
+        error_msg = f"Error generating test cases: {str(e)}"
+        print(f"[ERROR] {error_msg}")
+        processing_status[job_id] = {
+            "status": "failed",
+            "stage": "error",
+            "message": error_msg,
+            "error": str(e)
+        }

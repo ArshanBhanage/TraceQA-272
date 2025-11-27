@@ -264,7 +264,8 @@ Generate test cases covering all categories. Be specific and actionable."""
         journey_name: str,
         document_filename: str,
         parse_result: Dict[str, Any],
-        document_type: Optional[str] = None
+        document_type: Optional[str] = None,
+        progress_callback: Optional[callable] = None
     ) -> Dict[str, Any]:
         """
         Process a document and generate test cases for all chunks
@@ -274,6 +275,7 @@ Generate test cases covering all categories. Be specific and actionable."""
             document_filename: Name of the document file
             parse_result: Parse result containing chunks
             document_type: Type of document (optional)
+            progress_callback: Optional callback function(chunk_index, total_chunks) for progress updates
             
         Returns:
             Dict containing all generated test cases and metadata
@@ -311,6 +313,11 @@ Generate test cases covering all categories. Be specific and actionable."""
         chunk_results = []
         for i, chunk in enumerate(chunks):
             print(f"[INFO] Processing chunk {i + 1}/{len(chunks)}...")
+            
+            # Call progress callback if provided
+            if progress_callback:
+                progress_callback(i, len(chunks))
+            
             result = self.generate_test_cases_for_chunk(chunk, i)
             chunk_results.append(result)
         
