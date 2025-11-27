@@ -8,6 +8,7 @@ from config import DOCUMENTS_DIR
 import os
 import shutil
 import asyncio
+import json
 from typing import Optional
 
 router = APIRouter()
@@ -258,6 +259,46 @@ async def get_processing_status(job_id: str):
     if job_id in processing_status:
         return processing_status[job_id]
     return {"status": "not_found", "message": "Job not found"}
+
+
+@router.get("/test-cases/{journey_name}")
+async def get_test_cases(journey_name: str):
+    """Get merged test cases for a journey"""
+    try:
+        # Path to merged test cases file
+        test_cases_file = DOCUMENTS_DIR / "journeys" / journey_name / f"{journey_name}_merged_test_cases.json"
+        
+        if not test_cases_file.exists():
+            return {
+                "success": False,
+                "message": f"No test cases found for journey: {journey_name}",
+                "test_cases": []
+            }
+        
+        # Read and return test cases
+        with open(test_cases_file, 'r') as f:
+            data = json.load(f)
+        
+        # Flatten all test cases from different categories into a single list
+        all_test_cases = []
+        for category, cases in data.get("test_cases", {}).items():
+            all_test_cases.extend(cases)
+        
+        return {
+            "success": True,
+            "journey_name": data.get("journey_name"),
+            "total_documents": data.get("total_documents", 0),
+            "test_cases": all_test_cases,
+            "summary": data.get("summary", {})
+        }
+    
+    except Exception as e:
+        print(f"[ERROR] Error loading test cases: {str(e)}")
+        return {
+            "success": False,
+            "message": f"Error loading test cases: {str(e)}",
+            "test_cases": []
+        }
 
 
 @router.post("/reset")
