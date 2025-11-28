@@ -112,3 +112,23 @@ INFO:     Application startup complete.
 ERROR:    [Errno 48] error while attempting to bind on address ('0.0.0.0', 8000): address already in use
 INFO:     Waiting for application shutdown.
 INFO:     Application shutdown complete.
+2025-11-27 18:07:51,938 - sentence_transformers.SentenceTransformer - INFO - Use pytorch device_name: mps
+2025-11-27 18:07:51,938 - sentence_transformers.SentenceTransformer - INFO - Load pretrained SentenceTransformer: sentence-transformers/all-MiniLM-L6-v2
+2025-11-27 18:07:53,375 - sentence_transformers.SentenceTransformer - INFO - Use pytorch device_name: mps
+2025-11-27 18:07:53,375 - sentence_transformers.SentenceTransformer - INFO - Load pretrained SentenceTransformer: sentence-transformers/all-MiniLM-L6-v2
+2025-11-27 18:07:54,000 - agents.rag_agent - INFO - RAG Agent initialized. FAISS indexes stored in: /Users/spartan/Documents/TraceQA-272/documents/faiss_indexes
+2025-11-27 18:07:54,004 - agents.postman_mcp_agent - INFO - Postman MCP Agent initialized
+INFO:     Started server process [47351]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+INFO:     Uvicorn running on http://0.0.0.0:8000 (Press CTRL+C to quit)
+2025-11-27 18:07:55,407 - agents.rag_agent - INFO - RAG Agent initialized. FAISS indexes stored in: /Users/spartan/Documents/TraceQA-272/documents/faiss_indexes
+2025-11-27 18:07:55,411 - agents.postman_mcp_agent - INFO - Postman MCP Agent initialized
+INFO:     Started server process [47528]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+ERROR:    [Errno 48] error while attempting to bind on address ('0.0.0.0', 8000): address already in use
+INFO:     Waiting for application shutdown.
+INFO:     Application shutdown complete.
+/opt/homebrew/Cellar/python@3.13/3.13.7/Frameworks/Python.framework/Versions/3.13/lib/python3.13/multiprocessing/resource_tracker.py:324: UserWarning: resource_tracker: There appear to be 1 leaked semaphore objects to clean up at shutdown: {'/loky-47351-2gzbk3o3'}
+  warnings.warn(

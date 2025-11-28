@@ -6,12 +6,11 @@ import requests
 import json
 from typing import Dict, Any, Optional
 from dotenv import load_dotenv
-from config import DOCUMENTS_DIR
+from config import DOCUMENTS_DIR, settings
 
 load_dotenv()
 
 LANDING_AI_API_KEY = os.getenv("LANDINGAI_API_KEY")
-LANDING_AI_BASE_URL = "https://api.va.landing.ai/v1/ade"
 
 
 class LandingAIAgent:
@@ -19,7 +18,7 @@ class LandingAIAgent:
     
     def __init__(self, api_key: Optional[str] = None):
         self.api_key = api_key or LANDING_AI_API_KEY
-        self.base_url = LANDING_AI_BASE_URL
+        self.base_url = settings.landingai_base_url
         
     def parse_document(self, document_path: str, model: str = "dpt-2-latest") -> Dict[str, Any]:
         """

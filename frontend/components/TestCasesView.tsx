@@ -3,6 +3,8 @@
 import { useState, useEffect } from "react";
 import * as XLSX from 'xlsx';
 
+const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+
 interface TestCase {
   id: string;
   title: string;
@@ -57,7 +59,7 @@ export default function TestCasesView({ journeyName }: TestCasesViewProps) {
 
   const loadAvailableJourneys = async () => {
     try {
-      const response = await fetch('http://localhost:8000/api/journeys');
+      const response = await fetch(`${API_URL}/api/journeys`);
       
       if (response.ok) {
         const data = await response.json();
@@ -91,7 +93,7 @@ export default function TestCasesView({ journeyName }: TestCasesViewProps) {
     
     setIsLoading(true);
     try {
-      const response = await fetch(`http://localhost:8000/api/test-cases/${journey}`);
+      const response = await fetch(`${API_URL}/api/test-cases/${journey}`);
       
       if (response.ok) {
         const data = await response.json();
@@ -121,7 +123,7 @@ export default function TestCasesView({ journeyName }: TestCasesViewProps) {
     setGenerationStatus("Starting test case generation...");
 
     try {
-      const response = await fetch(`http://localhost:8000/api/generate-test-cases/${activeJourney}`, {
+      const response = await fetch(`${API_URL}/api/generate-test-cases/${activeJourney}`, {
         method: 'POST'
       });
 
@@ -148,7 +150,7 @@ export default function TestCasesView({ journeyName }: TestCasesViewProps) {
 
     const poll = async () => {
       try {
-        const response = await fetch(`http://localhost:8000/api/processing-status/${jobId}`);
+        const response = await fetch(`${API_URL}/api/processing-status/${jobId}`);
         const data = await response.json();
 
         // Update stage based on status and message

@@ -2,6 +2,8 @@
 
 import { useState, useEffect, useRef } from "react";
 
+const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+
 interface Evidence {
   document: string;
   journey: string;
@@ -102,7 +104,7 @@ Ask me anything about the documents in this journey, and I'll provide evidence-b
     setIsLoading(true);
 
     try {
-      const response = await fetch('http://localhost:8000/api/rag/query', {
+      const response = await fetch(`${API_URL}/api/rag/query`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

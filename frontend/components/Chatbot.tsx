@@ -2,6 +2,8 @@
 
 import { useState, useEffect, useRef } from "react";
 
+const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+
 interface Message {
   role: "user" | "assistant";
   content: string;
@@ -62,7 +64,7 @@ export default function Chatbot({ onJourneyChange }: ChatbotProps) {
     const getInitialMessage = async () => {
       setIsLoading(true);
       try {
-        const response = await fetch("http://localhost:8000/api/chat", {
+        const response = await fetch(`${API_URL}/api/chat`, {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
@@ -116,7 +118,7 @@ export default function Chatbot({ onJourneyChange }: ChatbotProps) {
     setIsLoading(true);
 
     try {
-      const response = await fetch("http://localhost:8000/api/chat", {
+      const response = await fetch(`${API_URL}/api/upload`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -226,7 +228,7 @@ export default function Chatbot({ onJourneyChange }: ChatbotProps) {
 
     const poll = async () => {
       try {
-        const response = await fetch(`http://localhost:8000/api/processing-status/${jobId}`);
+        const response = await fetch(`${API_URL}/api/processing-status/${jobId}`);
         const data = await response.json();
 
         // Update the processing message with current status
@@ -359,7 +361,7 @@ export default function Chatbot({ onJourneyChange }: ChatbotProps) {
     
     setIsLoading(true);
     try {
-      await fetch("http://localhost:8000/api/reset", {
+      await fetch(`${API_URL}/api/reset`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -367,7 +369,7 @@ export default function Chatbot({ onJourneyChange }: ChatbotProps) {
         body: JSON.stringify({ session_id: sessionId }),
       });
       
-      const response = await fetch("http://localhost:8000/api/chat", {
+      const response = await fetch(`${API_URL}/api/chat`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
