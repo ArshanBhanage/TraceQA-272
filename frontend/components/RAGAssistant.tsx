@@ -4,6 +4,18 @@ import { useState, useEffect, useRef } from "react";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
 
+// Utility function to strip markdown formatting
+const stripMarkdown = (text: string): string => {
+  return text
+    .replace(/\*\*(.+?)\*\*/g, '$1')  // Remove bold **text**
+    .replace(/\*(.+?)\*/g, '$1')       // Remove italic *text*
+    .replace(/\[(.+?)\]\(.+?\)/g, '$1') // Remove links [text](url)
+    .replace(/#{1,6}\s/g, '')          // Remove headers #
+    .replace(/`{1,3}(.+?)`{1,3}/g, '$1') // Remove code blocks
+    .replace(/~~(.+?)~~/g, '$1')       // Remove strikethrough ~~text~~
+    .replace(/_{1,2}(.+?)_{1,2}/g, '$1'); // Remove underscores __text__
+};
+
 interface Evidence {
   document: string;
   journey: string;
@@ -51,20 +63,20 @@ export default function RAGAssistant({ journeyName, onJourneyChange }: RAGAssist
     if (!journeyName) {
       setMessages([{
         role: "assistant",
-        content: `Hello! I'm your RAG (Retrieval-Augmented Generation) Assistant.
+        content: stripMarkdown(`Hello! I'm your RAG (Retrieval-Augmented Generation) Assistant.
 
 ⚠️ **Please select a journey from the dropdown above!**
 
-Once you select a journey, you can ask questions about the documents in that journey, and I'll provide evidence-based answers with source citations.`
+Once you select a journey, you can ask questions about the documents in that journey, and I'll provide evidence-based answers with source citations.`)
       }]);
     } else {
       setMessages([{
         role: "assistant",
-        content: `Hello! I'm your RAG (Retrieval-Augmented Generation) Assistant.
+        content: stripMarkdown(`Hello! I'm your RAG (Retrieval-Augmented Generation) Assistant.
 
 ✅ **Currently searching in journey: "${journeyName}"**
 
-Ask me anything about the documents in this journey, and I'll provide evidence-based answers with source citations.`
+Ask me anything about the documents in this journey, and I'll provide evidence-based answers with source citations.`)
       }]);
     }
   }, [journeyName]);
@@ -120,7 +132,7 @@ Ask me anything about the documents in this journey, and I'll provide evidence-b
       
       const assistantMessage: Message = {
         role: "assistant",
-        content: data.answer,
+        content: stripMarkdown(data.answer),
         evidence: data.evidence || [],
         sourcesCount: data.sources_count || 0
       };

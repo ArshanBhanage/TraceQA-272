@@ -9,6 +9,8 @@ import RAGAssistant from "../components/RAGAssistant";
 export default function Home() {
   const [currentPage, setCurrentPage] = useState<string>("test-cases");
   const [currentJourney, setCurrentJourney] = useState<string | null>(null);
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const [isChatExpanded, setIsChatExpanded] = useState(false);
 
   const handleJourneyChange = (journeyName: string | null) => {
     setCurrentJourney(journeyName);
@@ -38,18 +40,85 @@ export default function Home() {
   };
 
   return (
-    <main className="flex flex-col lg:flex-row h-screen bg-gradient-to-b from-gray-900 to-gray-950 overflow-hidden">
-      {/* Sidebar */}
-      <Sidebar onNavigate={setCurrentPage} currentPage={currentPage} />
-
-      {/* Main Content Area - Responsive width */}
-      <div className="flex-1 w-full lg:w-auto overflow-hidden order-2 lg:order-1">
-        {renderMainContent()}
+    <main className="flex flex-col h-screen bg-gradient-to-b from-gray-900 to-gray-950 overflow-hidden">
+      {/* Mobile Header with Hamburger */}
+      <div className="lg:hidden flex items-center justify-between p-4 border-b border-gray-800 bg-gray-900">
+        <h1 className="text-xl font-bold text-white">TraceQA</h1>
+        <div className="flex items-center space-x-2">
+          {/* Chat Toggle for Mobile */}
+          <button
+            onClick={() => setIsChatExpanded(!isChatExpanded)}
+            className="p-2 hover:bg-gray-800 rounded-lg text-gray-400 hover:text-white transition-colors"
+          >
+            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z" />
+            </svg>
+          </button>
+          {/* Menu Toggle */}
+          <button
+            onClick={() => setIsMobileMenuOpen(true)}
+            className="p-2 hover:bg-gray-800 rounded-lg text-gray-400 hover:text-white transition-colors"
+          >
+            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
+            </svg>
+          </button>
+        </div>
       </div>
 
-      {/* Chatbot - Responsive width and positioning */}
-      <div className="w-full lg:w-[30vw] lg:min-w-[400px] lg:max-w-[500px] h-[40vh] lg:h-auto border-t lg:border-t-0 lg:border-l border-gray-800 order-3 lg:order-2">
-        <Chatbot onJourneyChange={handleJourneyChange} />
+      <div className="flex flex-1 overflow-hidden h-full">
+        {/* Sidebar */}
+        <Sidebar 
+          onNavigate={setCurrentPage} 
+          currentPage={currentPage}
+          isMobileMenuOpen={isMobileMenuOpen}
+          onCloseMobileMenu={() => setIsMobileMenuOpen(false)}
+        />
+
+        {/* Main Content Area */}
+        <div className="flex-1 overflow-hidden flex flex-col lg:flex-row h-full">
+          {/* Content */}
+          <div className="flex-1 overflow-hidden h-full">
+            {renderMainContent()}
+          </div>
+
+          {/* Chatbot - Desktop: Side panel, Mobile: Expandable overlay */}
+          <div className={`
+            lg:w-[30vw] lg:min-w-[400px] lg:max-w-[500px] lg:relative lg:h-full
+            fixed inset-x-0 bottom-0 z-30 lg:z-auto
+            border-t lg:border-t-0 lg:border-l border-gray-800
+            bg-gray-950 lg:bg-transparent
+            transition-transform duration-300 ease-in-out
+            ${
+              isChatExpanded 
+                ? 'h-[70vh] translate-y-0' 
+                : 'h-[60px] translate-y-[calc(100%-60px)] lg:translate-y-0'
+            }
+          `}>
+            {/* Mobile Chat Header */}
+            <button
+              onClick={() => setIsChatExpanded(!isChatExpanded)}
+              className="w-full p-4 flex items-center justify-between bg-gray-900 border-b border-gray-800 lg:hidden"
+            >
+              <span className="text-white font-semibold">Chat Assistant</span>
+              <svg 
+                className={`w-5 h-5 text-gray-400 transition-transform ${
+                  isChatExpanded ? 'rotate-180' : ''
+                }`} 
+                fill="none" 
+                stroke="currentColor" 
+                viewBox="0 0 24 24"
+              >
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+              </svg>
+            </button>
+            
+            {/* Chat Content */}
+            <div className="h-full overflow-hidden">
+              <Chatbot onJourneyChange={handleJourneyChange} />
+            </div>
+          </div>
+        </div>
       </div>
     </main>
   );

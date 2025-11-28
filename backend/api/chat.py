@@ -60,7 +60,7 @@ async def chat(request: ChatRequest):
     # Handle empty message (used for getting initial/next message without user input)
     if not request.message.strip():
         # If conversation just started or needs reset, invoke initial flow
-        if state["conversation_step"] == "initial":
+        if state["conversation_step"] == "initial" or not state["messages"]:
             state["user_input"] = ""
         elif state["conversation_step"] == "document_uploaded":
             # Document was just uploaded, continue to next step

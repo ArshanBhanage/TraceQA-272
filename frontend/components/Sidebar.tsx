@@ -5,10 +5,19 @@ import { useState } from "react";
 interface SidebarProps {
   onNavigate: (page: string) => void;
   currentPage: string;
+  isMobileMenuOpen?: boolean;
+  onCloseMobileMenu?: () => void;
 }
 
-export default function Sidebar({ onNavigate, currentPage }: SidebarProps) {
+export default function Sidebar({ onNavigate, currentPage, isMobileMenuOpen, onCloseMobileMenu }: SidebarProps) {
   const [isExpanded, setIsExpanded] = useState(true);
+
+  const handleNavigate = (page: string) => {
+    onNavigate(page);
+    if (onCloseMobileMenu) {
+      onCloseMobileMenu();
+    }
+  };
 
   const menuItems = [
     {
@@ -41,46 +50,68 @@ export default function Sidebar({ onNavigate, currentPage }: SidebarProps) {
   ];
 
   return (
-    <div
-      className={`${
-        isExpanded ? "w-64" : "w-20"
-      } bg-gray-900 border-r border-gray-800 transition-all duration-300 flex flex-col`}
-    >
-      {/* Header */}
-      <div className="p-4 border-b border-gray-800 flex items-center justify-between">
-        {isExpanded && (
-          <h1 className="text-xl font-bold text-white">TraceQA</h1>
-        )}
-        <button
-          onClick={() => setIsExpanded(!isExpanded)}
-          className="p-2 hover:bg-gray-800 rounded-lg text-gray-400 hover:text-white transition-colors"
-        >
-          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
-          </svg>
-        </button>
-      </div>
-
-      {/* Menu Items */}
-      <nav className="flex-1 p-4 space-y-2">
-        {menuItems.map((item) => (
+    <>
+      {/* Mobile Overlay */}
+      {isMobileMenuOpen && (
+        <div 
+          className="fixed inset-0 bg-black/50 z-40 lg:hidden"
+          onClick={onCloseMobileMenu}
+        />
+      )}
+      
+      <div
+        className={`${
+          isExpanded ? "w-64" : "w-20"
+        } bg-gray-900 border-r border-gray-800 transition-all duration-300 flex flex-col
+        fixed lg:relative inset-y-0 left-0 z-50 lg:z-auto
+        transform ${
+          isMobileMenuOpen ? "translate-x-0" : "-translate-x-full"
+        } lg:translate-x-0`}
+      >
+        {/* Header */}
+        <div className="p-4 border-b border-gray-800 flex items-center justify-between">
+          {isExpanded && (
+            <h1 className="text-xl font-bold text-white">TraceQA</h1>
+          )}
           <button
-            key={item.id}
-            onClick={() => onNavigate(item.id)}
-            className={`w-full flex items-center ${
-              isExpanded ? "space-x-3 px-4" : "justify-center"
-            } py-3 rounded-lg transition-colors ${
-              currentPage === item.id
-                ? "bg-blue-600 text-white"
-                : "text-gray-400 hover:bg-gray-800 hover:text-white"
-            }`}
-            title={!isExpanded ? item.label : undefined}
+            onClick={() => setIsExpanded(!isExpanded)}
+            className="p-2 hover:bg-gray-800 rounded-lg text-gray-400 hover:text-white transition-colors hidden lg:block"
           >
-            {item.icon}
-            {isExpanded && <span className="font-medium">{item.label}</span>}
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
+            </svg>
           </button>
-        ))}
-      </nav>
+          {/* Close button for mobile */}
+          <button
+            onClick={onCloseMobileMenu}
+            className="p-2 hover:bg-gray-800 rounded-lg text-gray-400 hover:text-white transition-colors lg:hidden"
+          >
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+        </div>
+
+        {/* Menu Items */}
+        <nav className="flex-1 p-4 space-y-2">
+          {menuItems.map((item) => (
+            <button
+              key={item.id}
+              onClick={() => handleNavigate(item.id)}
+              className={`w-full flex items-center ${
+                isExpanded ? "space-x-3 px-4" : "justify-center"
+              } py-3 rounded-lg transition-colors ${
+                currentPage === item.id
+                  ? "bg-blue-600 text-white"
+                  : "text-gray-400 hover:bg-gray-800 hover:text-white"
+              }`}
+              title={!isExpanded ? item.label : undefined}
+            >
+              {item.icon}
+              {isExpanded && <span className="font-medium">{item.label}</span>}
+            </button>
+          ))}
+        </nav>
 
       {/* Footer */}
       <div className="p-4 border-t border-gray-800">
@@ -98,5 +129,6 @@ export default function Sidebar({ onNavigate, currentPage }: SidebarProps) {
         </button>
       </div>
     </div>
+    </>
   );
 }

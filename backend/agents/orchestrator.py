@@ -88,7 +88,7 @@ Document type (if set): {document_type}
     # Check for cancel/exit commands
     if user_input.lower() in ["cancel", "exit", "quit", "restart"]:
         result = agent_executor.invoke({
-            "input": "User wants to restart. Acknowledge their request and present the main menu options again.",
+            "input": "User wants to restart. Acknowledge their request briefly and present the main menu with two options:\n1. Add a journey (e.g., POS, Inventory Management, etc.)\n2. New document under an existing journey (updates like annextures, addendums, emails, etc.)\n\nAsk them to enter 1 or 2. Also mention they can type 'cancel' or 'exit' at any time to restart.",
             "chat_history": [],
             "conversation_step": "initial",
             "journey_name": None,

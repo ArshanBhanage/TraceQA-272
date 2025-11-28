@@ -4,6 +4,18 @@ import { useState, useEffect, useRef } from "react";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
 
+// Utility function to strip markdown formatting
+const stripMarkdown = (text: string): string => {
+  return text
+    .replace(/\*\*(.+?)\*\*/g, '$1')  // Remove bold **text**
+    .replace(/\*(.+?)\*/g, '$1')       // Remove italic *text*
+    .replace(/\[(.+?)\]\(.+?\)/g, '$1') // Remove links [text](url)
+    .replace(/#{1,6}\s/g, '')          // Remove headers #
+    .replace(/`{1,3}(.+?)`{1,3}/g, '$1') // Remove code blocks
+    .replace(/~~(.+?)~~/g, '$1')       // Remove strikethrough ~~text~~
+    .replace(/_{1,2}(.+?)_{1,2}/g, '$1'); // Remove underscores __text__
+};
+
 interface Message {
   role: "user" | "assistant";
   content: string;
@@ -64,6 +76,7 @@ export default function Chatbot({ onJourneyChange }: ChatbotProps) {
     const getInitialMessage = async () => {
       setIsLoading(true);
       try {
+        console.log('Fetching initial message from:', `${API_URL}/api/chat`);
         const response = await fetch(`${API_URL}/api/chat`, {
           method: "POST",
           headers: {
@@ -72,19 +85,26 @@ export default function Chatbot({ onJourneyChange }: ChatbotProps) {
           body: JSON.stringify({ message: "", session_id: sessionId }),
         });
 
+        console.log('Response status:', response.status);
+        if (!response.ok) {
+          throw new Error(`HTTP error! status: ${response.status}`);
+        }
+
         const data = await response.json();
+        console.log('Initial message data:', data);
+        
         const initialMessage: Message = {
           role: "assistant",
-          content: data.response,
+          content: stripMarkdown(data.response),
         };
         setMessages([initialMessage]);
         
         updateChatState(data);
       } catch (error) {
-        console.error("Error:", error);
+        console.error("Error loading initial message:", error);
         const errorMessage: Message = {
           role: "assistant",
-          content: "Sorry, there was an error connecting to the server.",
+          content: "Sorry, there was an error connecting to the server. Please check if the backend is running.",
         };
         setMessages([errorMessage]);
       } finally {
@@ -118,7 +138,7 @@ export default function Chatbot({ onJourneyChange }: ChatbotProps) {
     setIsLoading(true);
 
     try {
-      const response = await fetch(`${API_URL}/api/upload`, {
+      const response = await fetch(`${API_URL}/api/chat`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -129,7 +149,7 @@ export default function Chatbot({ onJourneyChange }: ChatbotProps) {
       const data = await response.json();
       const assistantMessage: Message = {
         role: "assistant",
-        content: data.response,
+        content: stripMarkdown(data.response),
       };
       setMessages((prev) => [...prev, assistantMessage]);
       
@@ -398,9 +418,9 @@ export default function Chatbot({ onJourneyChange }: ChatbotProps) {
   };
 
   return (
-    <div className="h-full flex flex-col bg-gray-950 border-l border-gray-800">
-      {/* Header */}
-      <div className="border-b border-gray-800 bg-gray-900/50 backdrop-blur-sm p-4 flex items-center justify-between">
+    <div className="h-full flex flex-col bg-gray-950 overflow-hidden">
+      {/* Header - Hidden on mobile as it's shown in parent */}
+      <div className="hidden lg:flex border-b border-gray-800 bg-gray-900/50 backdrop-blur-sm p-4 items-center justify-between flex-shrink-0">
         <h2 className="text-lg font-semibold text-white">Chat Assistant</h2>
         <button
           onClick={startNewChat}
@@ -410,9 +430,18 @@ export default function Chatbot({ onJourneyChange }: ChatbotProps) {
         </button>
       </div>
 
-      {/* Messages */}
-      <div className="flex-1 overflow-y-auto p-4 space-y-4">
-        {messages.map((message, index) => (
+      {/* Mobile New Chat Button */}
+      <div className="lg:hidden flex justify-end p-2 border-b border-gray-800 bg-gray-900/50 flex-shrink-0">
+        <button
+          onClick={startNewChat}
+          className="px-3 py-1.5 bg-gray-800 hover:bg-gray-700 text-gray-200 rounded-lg transition-colors text-xs font-medium"
+        >
+          New Chat
+        </button>
+      </div>
+
+      {/* Messages - Scrollable area with fixed height */}
+      <div className="flex-1 overflow-y-auto p-3 md:p-4 space-y-3 md:space-y-4 min-h-0">{messages.map((message, index) => (
           <div
             key={index}
             className={`flex ${
@@ -420,13 +449,13 @@ export default function Chatbot({ onJourneyChange }: ChatbotProps) {
             }`}
           >
             <div
-              className={`max-w-[85%] rounded-lg px-4 py-2 ${
+              className={`max-w-[90%] md:max-w-[85%] rounded-lg px-3 md:px-4 py-2 ${
                 message.role === "user"
                   ? "bg-blue-600 text-white"
                   : "bg-gray-800 text-gray-100 border border-gray-700"
               }`}
             >
-              <p className="text-sm whitespace-pre-wrap">{message.content}</p>
+              <p className="text-xs md:text-sm whitespace-pre-wrap">{message.content}</p>
               
               {/* Processing Progress Indicator */}
               {message.processingStatus && (
@@ -524,14 +553,14 @@ export default function Chatbot({ onJourneyChange }: ChatbotProps) {
         <div ref={messagesEndRef} />
       </div>
 
-      {/* Input Area */}
-      <div className="border-t border-gray-800 bg-gray-900/50 p-4">
+      {/* Input Area - Fixed at bottom */}
+      <div className="border-t border-gray-800 bg-gray-900/50 p-2 md:p-4 flex-shrink-0">
         {chatState.conversationStep === "awaiting_document_upload" ? (
           <div className="space-y-2">
-            <label className="flex flex-col items-center justify-center w-full h-24 border-2 border-gray-700 border-dashed rounded-lg cursor-pointer bg-gray-800 hover:bg-gray-750 transition-colors">
+            <label className="flex flex-col items-center justify-center w-full h-20 md:h-24 border-2 border-gray-700 border-dashed rounded-lg cursor-pointer bg-gray-800 hover:bg-gray-750 transition-colors">
               <div className="flex flex-col items-center justify-center py-2">
                 <svg
-                  className="w-8 h-8 mb-2 text-gray-400"
+                  className="w-6 md:w-8 h-6 md:h-8 mb-1 md:mb-2 text-gray-400"
                   fill="none"
                   stroke="currentColor"
                   viewBox="0 0 24 24"
@@ -557,20 +586,20 @@ export default function Chatbot({ onJourneyChange }: ChatbotProps) {
             </label>
           </div>
         ) : (
-          <div className="flex items-end space-x-2">
+          <div className="flex items-end space-x-1 md:space-x-2">
             <textarea
               value={input}
               onChange={(e) => setInput(e.target.value)}
               onKeyPress={handleKeyPress}
               placeholder="Type your message..."
               rows={2}
-              className="flex-1 px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-gray-100 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none text-sm"
+              className="flex-1 px-2 md:px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-gray-100 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none text-xs md:text-sm"
               disabled={isLoading}
             />
             <button
               onClick={sendMessage}
               disabled={isLoading || !input.trim()}
-              className="px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-700 disabled:cursor-not-allowed text-white rounded-lg transition-colors font-medium text-sm"
+              className="px-3 md:px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-700 disabled:cursor-not-allowed text-white rounded-lg transition-colors font-medium text-xs md:text-sm"
             >
               Send
             </button>
