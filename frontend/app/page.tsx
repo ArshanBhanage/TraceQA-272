@@ -38,17 +38,17 @@ export default function Home() {
   };
 
   return (
-    <main className="flex h-screen bg-gradient-to-b from-gray-900 to-gray-950 overflow-hidden">
+    <main className="flex flex-col lg:flex-row h-screen bg-gradient-to-b from-gray-900 to-gray-950 overflow-hidden">
       {/* Sidebar */}
       <Sidebar onNavigate={setCurrentPage} currentPage={currentPage} />
 
-      {/* Main Content Area - Takes remaining space (70%) */}
-      <div className="flex-1 w-full overflow-hidden">
+      {/* Main Content Area - Responsive width */}
+      <div className="flex-1 w-full lg:w-auto overflow-hidden order-2 lg:order-1">
         {renderMainContent()}
       </div>
 
-      {/* Chatbot - 30% of the screen width (excluding sidebar) */}
-      <div className="w-[30vw] min-w-[400px] max-w-[500px] border-l border-gray-800">
+      {/* Chatbot - Responsive width and positioning */}
+      <div className="w-full lg:w-[30vw] lg:min-w-[400px] lg:max-w-[500px] h-[40vh] lg:h-auto border-t lg:border-t-0 lg:border-l border-gray-800 order-3 lg:order-2">
         <Chatbot onJourneyChange={handleJourneyChange} />
       </div>
     </main>
