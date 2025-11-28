@@ -3,19 +3,21 @@ from pydantic import BaseModel
 from agents.orchestrator import create_orchestrator_graph
 from agents.landing_ai_agent import create_landing_ai_agent
 from agents.test_case_generator_agent import create_test_case_generator_agent
+from agents.rag_agent import create_rag_agent
 from langchain_core.messages import HumanMessage, AIMessage
 from config import DOCUMENTS_DIR
 import os
 import shutil
 import asyncio
 import json
-from typing import Optional, Dict, Any
+from typing import Optional, Dict, Any, List
 
 router = APIRouter()
 
 orchestrator_graph = create_orchestrator_graph()
 landing_ai_agent = create_landing_ai_agent()
 test_case_generator = create_test_case_generator_agent()
+rag_agent = create_rag_agent()
 
 # Store conversation states in memory (use Redis/DB in production)
 conversation_states = {}
@@ -175,7 +177,7 @@ async def process_document_async(
     document_type: Optional[str],
     session_id: str
 ):
-    """Async task to parse document only (no test case generation)"""
+    """Async task to parse document and index into Pinecone"""
     job_id = f"{session_id}_{filename}"
     
     try:
@@ -196,15 +198,32 @@ async def process_document_async(
         
         chunks_count = len(landing_ai_result.get("chunks", []))
         
+        # Index into FAISS for RAG
+        processing_status[job_id]["stage"] = "indexing"
+        processing_status[job_id]["message"] = "Indexing document into FAISS vector store..."
+        
+        print(f"[INFO] Indexing document into FAISS: {filename}")
+        index_result = await asyncio.to_thread(
+            rag_agent.index_document,
+            journey_name=journey_name,
+            document_filename=filename,
+            parse_result=landing_ai_result,
+            document_type=document_type
+        )
+        
+        indexed_chunks = index_result.get("indexed_chunks", 0)
+        print(f"[INFO] Indexed {indexed_chunks} chunks into FAISS for journey '{journey_name}'")
+        
         # Update status to completed (parsing only)
         processing_status[job_id] = {
             "status": "completed",
             "stage": "parsed",
-            "message": f"Document parsed successfully! Extracted {chunks_count} chunks.\n\nYou can now generate test cases from the Test Cases view.",
-            "chunks_count": chunks_count
+            "message": f"Document processed successfully!\n\nParsed {chunks_count} chunks\nIndexed {indexed_chunks} embeddings\n\nYou can now:\n- Generate test cases from Test Cases view\n- Ask questions in RAG Assistant",
+            "chunks_count": chunks_count,
+            "indexed_chunks": indexed_chunks
         }
         
-        print(f"[INFO] Document parsed successfully: {chunks_count} chunks.")
+        print(f"[INFO] Document parsed and indexed successfully: {chunks_count} chunks, {indexed_chunks} vectors.")
         
     except Exception as e:
         error_msg = f"Error processing document: {str(e)}"
@@ -524,4 +543,66 @@ async def generate_all_test_cases_for_journey(
             "stage": "error",
             "message": error_msg,
             "error": str(e)
+        }
+
+
+# RAG Endpoints
+
+class RAGQueryRequest(BaseModel):
+    question: str
+    journey_name: Optional[str] = None
+    top_k: int = 5
+
+
+class RAGQueryResponse(BaseModel):
+    success: bool
+    answer: str
+    evidence: List[Dict[str, Any]]
+    question: str
+    sources_count: int = 0
+
+
+@router.post("/rag/query", response_model=RAGQueryResponse)
+async def rag_query(request: RAGQueryRequest):
+    """Query the RAG system with a question"""
+    try:
+        result = await asyncio.to_thread(
+            rag_agent.query,
+            question=request.question,
+            journey_name=request.journey_name,
+            top_k=request.top_k
+        )
+        
+        return RAGQueryResponse(
+            success=result.get("success", False),
+            answer=result.get("answer", ""),
+            evidence=result.get("evidence", []),
+            question=result.get("question", request.question),
+            sources_count=result.get("sources_count", 0)
+        )
+    except Exception as e:
+        print(f"[ERROR] RAG query failed: {str(e)}")
+        return RAGQueryResponse(
+            success=False,
+            answer=f"Error processing question: {str(e)}",
+            evidence=[],
+            question=request.question,
+            sources_count=0
+        )
+
+
+@router.get("/rag/stats")
+async def rag_stats(journey_name: Optional[str] = None):
+    """Get RAG index statistics"""
+    try:
+        stats = await asyncio.to_thread(
+            rag_agent.get_index_stats,
+            journey_name=journey_name
+        )
+        return stats
+    except Exception as e:
+        print(f"[ERROR] Failed to get RAG stats: {str(e)}")
+        return {
+            "success": False,
+            "message": str(e)
         }

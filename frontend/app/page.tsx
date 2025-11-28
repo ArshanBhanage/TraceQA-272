@@ -4,6 +4,7 @@ import { useState } from "react";
 import Sidebar from "../components/Sidebar";
 import Chatbot from "../components/Chatbot";
 import TestCasesView from "../components/TestCasesView";
+import RAGAssistant from "../components/RAGAssistant";
 
 export default function Home() {
   const [currentPage, setCurrentPage] = useState<string>("test-cases");
@@ -17,6 +18,8 @@ export default function Home() {
     switch (currentPage) {
       case "test-cases":
         return <TestCasesView key={currentJourney || 'default'} journeyName={currentJourney} />;
+      case "rag-assistant":
+        return <RAGAssistant key={currentJourney || 'default'} journeyName={currentJourney} onJourneyChange={handleJourneyChange} />;
       case "journeys":
         return (
           <div className="h-full flex items-center justify-center bg-gray-950">
