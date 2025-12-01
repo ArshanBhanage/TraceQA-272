@@ -48,12 +48,12 @@ export default function TestCasesView({ journeyName }: TestCasesViewProps) {
   }, [journeyName]);
 
   useEffect(() => {
-    // Use journeyName from props if available, otherwise use selected journey
-    const activeJourney = journeyName || selectedJourney;
+    // Prefer local selection from dropdown (selectedJourney) over prop (journeyName)
+    const activeJourney = selectedJourney || journeyName;
     if (activeJourney) {
       loadTestCases(activeJourney);
     }
-  }, [journeyName, selectedJourney]);
+  }, [selectedJourney, journeyName]);
 
   const loadAvailableJourneys = async () => {
     try {
@@ -91,7 +91,7 @@ export default function TestCasesView({ journeyName }: TestCasesViewProps) {
     
     setIsLoading(true);
     try {
-      const response = await fetch(`/api/test-cases/${journey}`);
+      const response = await fetch(`/api/test-cases/${encodeURIComponent(journey)}`);
       
       if (response.ok) {
         const data = await response.json();
@@ -114,14 +114,14 @@ export default function TestCasesView({ journeyName }: TestCasesViewProps) {
   );
 
   const generateTestCases = async () => {
-    const activeJourney = journeyName || selectedJourney;
+    const activeJourney = selectedJourney || journeyName;
     if (!activeJourney) return;
 
     setIsGenerating(true);
     setGenerationStatus("Starting test case generation...");
 
     try {
-      const response = await fetch(`/api/generate-test-cases/${activeJourney}`, {
+      const response = await fetch(`/api/generate-test-cases/${encodeURIComponent(activeJourney)}`, {
         method: 'POST'
       });
 
@@ -182,7 +182,7 @@ export default function TestCasesView({ journeyName }: TestCasesViewProps) {
           }, 2000);
           
           // Reload test cases and journey info
-          const activeJourney = journeyName || selectedJourney;
+          const activeJourney = selectedJourney || journeyName;
           if (activeJourney) {
             loadTestCases(activeJourney);
             loadAvailableJourneys();
