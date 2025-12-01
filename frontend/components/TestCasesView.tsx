@@ -3,8 +3,6 @@
 import { useState, useEffect } from "react";
 import * as XLSX from 'xlsx';
 
-const API_URL = '';
-
 interface TestCase {
   id: string;
   title: string;

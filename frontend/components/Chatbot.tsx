@@ -2,8 +2,6 @@
 
 import { useState, useEffect, useRef } from "react";
 
-const API_URL = '';
-
 // Utility function to strip markdown formatting
 const stripMarkdown = (text: string): string => {
   return text
