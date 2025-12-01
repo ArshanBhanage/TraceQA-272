@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import * as XLSX from 'xlsx';
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+const API_URL = '';
 
 interface TestCase {
   id: string;
@@ -59,7 +59,7 @@ export default function TestCasesView({ journeyName }: TestCasesViewProps) {
 
   const loadAvailableJourneys = async () => {
     try {
-      const response = await fetch(`${API_URL}/api/journeys`);
+      const response = await fetch(`/api/journeys`);
       
       if (response.ok) {
         const data = await response.json();
@@ -93,7 +93,7 @@ export default function TestCasesView({ journeyName }: TestCasesViewProps) {
     
     setIsLoading(true);
     try {
-      const response = await fetch(`${API_URL}/api/test-cases/${journey}`);
+      const response = await fetch(`/api/test-cases/${journey}`);
       
       if (response.ok) {
         const data = await response.json();
@@ -123,7 +123,7 @@ export default function TestCasesView({ journeyName }: TestCasesViewProps) {
     setGenerationStatus("Starting test case generation...");
 
     try {
-      const response = await fetch(`${API_URL}/api/generate-test-cases/${activeJourney}`, {
+      const response = await fetch(`/api/generate-test-cases/${activeJourney}`, {
         method: 'POST'
       });
 

@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef } from "react";
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+const API_URL = '';
 
 // Utility function to strip markdown formatting
 const stripMarkdown = (text: string): string => {
@@ -116,7 +116,7 @@ Ask me anything about the documents in this journey, and I'll provide evidence-b
     setIsLoading(true);
 
     try {
-      const response = await fetch(`${API_URL}/api/rag/query`, {
+      const response = await fetch(`/api/rag/query`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

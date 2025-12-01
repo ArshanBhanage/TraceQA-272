@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef } from "react";
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+const API_URL = '';
 
 // Utility function to strip markdown formatting
 const stripMarkdown = (text: string): string => {
@@ -187,7 +187,7 @@ export default function Chatbot({ onJourneyChange }: ChatbotProps) {
       }
       formData.append('session_id', sessionId);
 
-      const response = await fetch('http://localhost:8000/api/upload', {
+      const response = await fetch(`${API_URL}/api/upload`, {
         method: 'POST',
         body: formData,
       });
