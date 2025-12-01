@@ -150,7 +150,7 @@ export default function TestCasesView({ journeyName }: TestCasesViewProps) {
 
     const poll = async () => {
       try {
-        const response = await fetch(`${API_URL}/api/processing-status/${jobId}`);
+        const response = await fetch(`/api/processing-status/${jobId}`);
         const data = await response.json();
 
         // Update stage based on status and message

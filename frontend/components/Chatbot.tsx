@@ -76,8 +76,8 @@ export default function Chatbot({ onJourneyChange }: ChatbotProps) {
     const getInitialMessage = async () => {
       setIsLoading(true);
       try {
-        console.log('Fetching initial message from:', `${API_URL}/api/chat`);
-        const response = await fetch(`${API_URL}/api/chat`, {
+        console.log('Fetching initial message from:', `/api/chat`);
+        const response = await fetch(`/api/chat`, {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
@@ -138,7 +138,7 @@ export default function Chatbot({ onJourneyChange }: ChatbotProps) {
     setIsLoading(true);
 
     try {
-      const response = await fetch(`${API_URL}/api/chat`, {
+      const response = await fetch(`/api/chat`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -187,7 +187,7 @@ export default function Chatbot({ onJourneyChange }: ChatbotProps) {
       }
       formData.append('session_id', sessionId);
 
-      const response = await fetch(`${API_URL}/api/upload`, {
+      const response = await fetch(`/api/upload`, {
         method: 'POST',
         body: formData,
       });
@@ -248,7 +248,7 @@ export default function Chatbot({ onJourneyChange }: ChatbotProps) {
 
     const poll = async () => {
       try {
-        const response = await fetch(`${API_URL}/api/processing-status/${jobId}`);
+        const response = await fetch(`/api/processing-status/${jobId}`);
         const data = await response.json();
 
         // Update the processing message with current status
@@ -381,7 +381,7 @@ export default function Chatbot({ onJourneyChange }: ChatbotProps) {
     
     setIsLoading(true);
     try {
-      await fetch(`${API_URL}/api/reset`, {
+      await fetch(`/api/reset`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -389,7 +389,7 @@ export default function Chatbot({ onJourneyChange }: ChatbotProps) {
         body: JSON.stringify({ session_id: sessionId }),
       });
       
-      const response = await fetch(`${API_URL}/api/chat`, {
+      const response = await fetch(`/api/chat`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
