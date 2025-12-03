@@ -27,6 +27,7 @@ export default function TestCasesView({ journeyName }: TestCasesViewProps) {
   const [selectedTestCase, setSelectedTestCase] = useState<TestCase | null>(null);
   const [searchTerm, setSearchTerm] = useState("");
   const [availableJourneys, setAvailableJourneys] = useState<string[]>([]);
+  const [availableJourneysInfo, setAvailableJourneysInfo] = useState<any[]>([]);
   const [selectedJourney, setSelectedJourney] = useState<string | null>(null);
   const [viewMode, setViewMode] = useState<"cards" | "table">("cards");
   const [isGenerating, setIsGenerating] = useState(false);
@@ -62,20 +63,24 @@ export default function TestCasesView({ journeyName }: TestCasesViewProps) {
       if (response.ok) {
         const data = await response.json();
         if (data.success) {
-          // Extract journey names from the response
+          // Extract journey names from the response and store full info
           const journeyNames = data.journeys.map((j: any) => j.name);
           setAvailableJourneys(journeyNames);
-          
-          // Store full journey info
+          setAvailableJourneysInfo(data.journeys || []);
+
+          // Determine active journey (prefer prop over local selection)
           const activeJourney = journeyName || selectedJourney;
           if (activeJourney) {
             const info = data.journeys.find((j: any) => j.name === activeJourney);
-            setJourneyInfo(info);
+            setJourneyInfo(info || null);
           }
-          
+
           // Auto-select first journey if no journey is selected
           if (!journeyName && !selectedJourney && journeyNames.length > 0) {
-            setSelectedJourney(journeyNames[0]);
+            const first = journeyNames[0];
+            setSelectedJourney(first);
+            const info = data.journeys.find((j: any) => j.name === first);
+            setJourneyInfo(info || null);
           }
         }
       } else {
@@ -287,7 +292,12 @@ export default function TestCasesView({ journeyName }: TestCasesViewProps) {
             <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-4 mt-2">
               <select
                 value={selectedJourney || journeyName || ""}
-                onChange={(e) => setSelectedJourney(e.target.value)}
+                onChange={(e) => {
+                  const val = e.target.value;
+                  setSelectedJourney(val);
+                  const info = availableJourneysInfo.find((j: any) => j.name === val) || null;
+                  setJourneyInfo(info);
+                }}
                 className="px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-gray-100 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent w-full sm:w-auto"
               >
                 <option value="">Select Journey...</option>
