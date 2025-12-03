@@ -77,8 +77,8 @@ export default function Home() {
 
         {/* Main Content Area */}
         <div className="flex-1 overflow-hidden flex flex-col lg:flex-row h-full">
-          {/* Content */}
-          <div className="flex-1 overflow-hidden h-full">
+          {/* Content - add bottom padding on mobile for collapsed chat bar */}
+          <div className="flex-1 overflow-hidden h-full pb-[60px] lg:pb-0">
             {renderMainContent()}
           </div>
 
@@ -88,17 +88,19 @@ export default function Home() {
             fixed inset-x-0 bottom-0 z-30 lg:z-auto
             border-t lg:border-t-0 lg:border-l border-gray-800
             bg-gray-950 lg:bg-transparent
-            transition-transform duration-300 ease-in-out
+            transition-all duration-300 ease-in-out
+            flex flex-col
             ${
               isChatExpanded 
-                ? 'h-[70vh] translate-y-0' 
-                : 'h-[60px] translate-y-[calc(100%-60px)] lg:translate-y-0'
+                ? 'h-[85vh] max-h-[calc(100vh-60px)]' 
+                : 'h-[60px]'
             }
+            lg:h-full lg:max-h-full
           `}>
             {/* Mobile Chat Header */}
             <button
               onClick={() => setIsChatExpanded(!isChatExpanded)}
-              className="w-full p-4 flex items-center justify-between bg-gray-900 border-b border-gray-800 lg:hidden"
+              className="w-full p-4 flex items-center justify-between bg-gray-900 border-b border-gray-800 lg:hidden flex-shrink-0"
             >
               <span className="text-white font-semibold">Chat Assistant</span>
               <svg 
@@ -109,12 +111,12 @@ export default function Home() {
                 stroke="currentColor" 
                 viewBox="0 0 24 24"
               >
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 15l7-7 7 7" />
               </svg>
             </button>
             
-            {/* Chat Content */}
-            <div className="h-full overflow-hidden">
+            {/* Chat Content - takes remaining height */}
+            <div className={`flex-1 overflow-hidden ${isChatExpanded ? 'block' : 'hidden lg:block'}`}>
               <Chatbot onJourneyChange={handleJourneyChange} />
             </div>
           </div>

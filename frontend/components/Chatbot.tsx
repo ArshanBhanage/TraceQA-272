@@ -416,7 +416,7 @@ export default function Chatbot({ onJourneyChange }: ChatbotProps) {
   };
 
   return (
-    <div className="h-full flex flex-col bg-gray-950 overflow-hidden">
+    <div className="h-full flex flex-col bg-gray-950">
       {/* Header - Hidden on mobile as it's shown in parent */}
       <div className="hidden lg:flex border-b border-gray-800 bg-gray-900/50 backdrop-blur-sm p-4 items-center justify-between flex-shrink-0">
         <h2 className="text-lg font-semibold text-white">Chat Assistant</h2>
@@ -438,8 +438,9 @@ export default function Chatbot({ onJourneyChange }: ChatbotProps) {
         </button>
       </div>
 
-      {/* Messages - Scrollable area with fixed height */}
-      <div className="flex-1 overflow-y-auto p-3 md:p-4 space-y-3 md:space-y-4 min-h-0">{messages.map((message, index) => (
+      {/* Messages - Scrollable area */}
+      <div className="flex-1 overflow-y-auto p-3 md:p-4 space-y-3 md:space-y-4">
+        {messages.map((message, index) => (
           <div
             key={index}
             className={`flex ${

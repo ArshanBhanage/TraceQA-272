@@ -278,17 +278,17 @@ export default function TestCasesView({ journeyName }: TestCasesViewProps) {
   };
 
   return (
-    <div className="h-full flex flex-col bg-gray-950">
+    <div className="h-full flex flex-col bg-gray-950 overflow-hidden">
       {/* Header */}
-      <div className="border-b border-gray-800 bg-gray-900/50 backdrop-blur-sm p-6">
-        <div className="flex items-center justify-between mb-4">
+      <div className="border-b border-gray-800 bg-gray-900/50 backdrop-blur-sm p-4 md:p-6 flex-shrink-0">
+        <div className="flex flex-col gap-4 mb-4">
           <div className="flex-1">
-            <h2 className="text-2xl font-bold text-white">Test Cases</h2>
-            <div className="flex items-center space-x-4 mt-2">
+            <h2 className="text-xl md:text-2xl font-bold text-white">Test Cases</h2>
+            <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-4 mt-2">
               <select
                 value={selectedJourney || journeyName || ""}
                 onChange={(e) => setSelectedJourney(e.target.value)}
-                className="px-4 py-2 bg-gray-800 border border-gray-700 rounded-lg text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                className="px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-gray-100 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent w-full sm:w-auto"
               >
                 <option value="">Select Journey...</option>
                 {availableJourneys.map((journey) => (
@@ -304,7 +304,7 @@ export default function TestCasesView({ journeyName }: TestCasesViewProps) {
               )}
             </div>
           </div>
-          <div className="flex items-center space-x-2">
+          <div className="flex flex-wrap items-center gap-2">
             {/* View Mode Toggle */}
             <div className="flex bg-gray-800 rounded-lg p-1">
               <button
@@ -337,7 +337,7 @@ export default function TestCasesView({ journeyName }: TestCasesViewProps) {
             <button
               onClick={generateTestCases}
               disabled={isGenerating || !journeyInfo?.has_parsed_docs || isLoading || (!journeyName && !selectedJourney)}
-              className="px-4 py-2 bg-purple-600 hover:bg-purple-700 disabled:bg-gray-700 disabled:cursor-not-allowed text-white rounded-lg transition-colors text-sm font-medium flex items-center space-x-2"
+              className="px-3 py-2 bg-purple-600 hover:bg-purple-700 disabled:bg-gray-700 disabled:cursor-not-allowed text-white rounded-lg transition-colors text-xs md:text-sm font-medium flex items-center space-x-1"
               title={!journeyInfo?.has_parsed_docs ? "No parsed documents available. Upload documents first." : "Generate test cases from parsed documents"}
             >
               {isGenerating ? (
@@ -346,14 +346,14 @@ export default function TestCasesView({ journeyName }: TestCasesViewProps) {
                     <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
                     <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
                   </svg>
-                  <span>Generating...</span>
+                  <span className="hidden sm:inline">Generating...</span>
                 </>
               ) : (
                 <>
                   <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
                   </svg>
-                  <span>Generate Test Cases</span>
+                  <span className="hidden sm:inline">Generate</span>
                 </>
               )}
             </button>
@@ -362,12 +362,12 @@ export default function TestCasesView({ journeyName }: TestCasesViewProps) {
             <button
               onClick={exportToExcel}
               disabled={testCases.length === 0}
-              className="px-4 py-2 bg-green-600 hover:bg-green-700 disabled:bg-gray-700 disabled:cursor-not-allowed text-white rounded-lg transition-colors text-sm font-medium flex items-center space-x-2"
+              className="px-3 py-2 bg-green-600 hover:bg-green-700 disabled:bg-gray-700 disabled:cursor-not-allowed text-white rounded-lg transition-colors text-xs md:text-sm font-medium flex items-center space-x-1"
             >
               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
               </svg>
-              <span>Export Excel</span>
+              <span className="hidden sm:inline">Export</span>
             </button>
 
             {/* Refresh Button */}
@@ -377,18 +377,18 @@ export default function TestCasesView({ journeyName }: TestCasesViewProps) {
                 if (activeJourney) loadTestCases(activeJourney);
               }}
               disabled={isLoading || (!journeyName && !selectedJourney)}
-              className="px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-700 disabled:cursor-not-allowed text-white rounded-lg transition-colors text-sm font-medium flex items-center space-x-2"
+              className="px-3 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-700 disabled:cursor-not-allowed text-white rounded-lg transition-colors text-xs md:text-sm font-medium flex items-center space-x-1"
             >
               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
               </svg>
-              <span>Refresh</span>
+              <span className="hidden sm:inline">Refresh</span>
             </button>
           </div>
         </div>
 
         {/* Search Bar */}
-        <div className="relative">
+        <div className="relative mt-4">
           <svg
             className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-500"
             fill="none"
@@ -402,7 +402,7 @@ export default function TestCasesView({ journeyName }: TestCasesViewProps) {
             placeholder="Search test cases..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
-            className="w-full pl-10 pr-4 py-2 bg-gray-800 border border-gray-700 rounded-lg text-gray-100 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+            className="w-full pl-10 pr-4 py-2 bg-gray-800 border border-gray-700 rounded-lg text-gray-100 text-sm placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
           />
         </div>
 
@@ -544,19 +544,19 @@ export default function TestCasesView({ journeyName }: TestCasesViewProps) {
 
         {/* Journey Info */}
         {journeyInfo && (selectedJourney || journeyName) && (
-          <div className="mt-4 flex items-center space-x-4 text-sm">
+          <div className="mt-4 flex flex-wrap items-center gap-2 text-sm">
             {journeyInfo.has_parsed_docs && (
-              <span className="px-3 py-1 bg-blue-900/30 text-blue-300 rounded-lg border border-blue-700">
+              <span className="px-2 py-1 bg-blue-900/30 text-blue-300 rounded-lg border border-blue-700 text-xs">
                 📄 {journeyInfo.parsed_doc_count} document{journeyInfo.parsed_doc_count !== 1 ? 's' : ''} parsed
               </span>
             )}
             {journeyInfo.has_test_cases && (
-              <span className="px-3 py-1 bg-green-900/30 text-green-300 rounded-lg border border-green-700">
+              <span className="px-2 py-1 bg-green-900/30 text-green-300 rounded-lg border border-green-700 text-xs">
                 ✅ {journeyInfo.test_case_count} test case{journeyInfo.test_case_count !== 1 ? 's' : ''}
               </span>
             )}
             {!journeyInfo.has_parsed_docs && (
-              <span className="px-3 py-1 bg-yellow-900/30 text-yellow-300 rounded-lg border border-yellow-700">
+              <span className="px-2 py-1 bg-yellow-900/30 text-yellow-300 rounded-lg border border-yellow-700 text-xs">
                 ⚠️ No documents uploaded yet
               </span>
             )}
@@ -565,7 +565,7 @@ export default function TestCasesView({ journeyName }: TestCasesViewProps) {
       </div>
 
       {/* Main Content */}
-      <div className="flex-1 overflow-hidden">
+      <div className="flex-1 overflow-auto p-4 md:p-6">
         {isLoading ? (
           <div className="h-full flex items-center justify-center">
             <div className="text-center">
@@ -579,69 +579,67 @@ export default function TestCasesView({ journeyName }: TestCasesViewProps) {
               <svg className="w-16 h-16 mx-auto text-gray-600 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
               </svg>
-              <h3 className="text-xl font-semibold text-gray-300 mb-2">No Journey Selected</h3>
-              <p className="text-gray-500">Please select a journey from the dropdown above to view test cases.</p>
+              <h3 className="text-lg md:text-xl font-semibold text-gray-300 mb-2">No Journey Selected</h3>
+              <p className="text-gray-500 text-sm">Please select a journey from the dropdown above to view test cases.</p>
             </div>
           </div>
         ) : filteredTestCases.length === 0 ? (
           <div className="h-full flex items-center justify-center">
-            <div className="text-center max-w-md">
-              <svg className="w-16 h-16 mx-auto text-gray-600 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <div className="text-center max-w-md px-4">
+              <svg className="w-12 h-12 md:w-16 md:h-16 mx-auto text-gray-600 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5m16 0h-2.586a1 1 0 00-.707.293l-2.414 2.414a1 1 0 01-.707.293h-3.172a1 1 0 01-.707-.293l-2.414-2.414A1 1 0 006.586 13H4" />
               </svg>
-              <h3 className="text-xl font-semibold text-gray-300 mb-2">No Test Cases Found</h3>
-              <p className="text-gray-500">
+              <h3 className="text-lg md:text-xl font-semibold text-gray-300 mb-2">No Test Cases Found</h3>
+              <p className="text-gray-500 text-sm">
                 {searchTerm ? "No test cases match your search." : "Upload documents to generate test cases."}
               </p>
             </div>
           </div>
         ) : viewMode === "cards" ? (
-          <div className="h-full overflow-y-auto p-6">
-            <div className="grid gap-4">
-              {filteredTestCases.map((testCase) => (
-                <div
-                  key={testCase.id}
-                  onClick={() => setSelectedTestCase(testCase)}
-                  className="bg-gray-900 border border-gray-800 rounded-lg p-4 hover:border-blue-500 cursor-pointer transition-colors"
-                >
-                  <div className="flex items-start justify-between mb-2">
-                    <h3 className="text-lg font-semibold text-white">{testCase.title}</h3>
-                    <span className={`px-3 py-1 rounded-full text-xs font-medium ${
-                      testCase.priority === 'high' ? 'bg-red-500/20 text-red-400' :
-                      testCase.priority === 'medium' ? 'bg-yellow-500/20 text-yellow-400' :
-                      'bg-green-500/20 text-green-400'
-                    }`}>
-                      {testCase.priority}
-                    </span>
-                  </div>
-                  <p className="text-gray-400 text-sm mb-3">{testCase.description}</p>
-                  <div className="flex items-center space-x-4 text-xs text-gray-500">
-                    <span className="flex items-center space-x-1">
-                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" />
-                      </svg>
-                      <span>{testCase.steps.length} steps</span>
-                    </span>
-                    {testCase.category && (
-                      <span className="px-2 py-0.5 rounded bg-blue-500/20 text-blue-400 capitalize">
-                        {testCase.category}
-                      </span>
-                    )}
-                    <span className={`px-2 py-0.5 rounded ${
-                      testCase.status === 'Passed' ? 'bg-green-500/20 text-green-400' :
-                      testCase.status === 'Failed' ? 'bg-red-500/20 text-red-400' :
-                      'bg-gray-500/20 text-gray-400'
-                    }`}>
-                      {testCase.status || 'Not Run'}
-                    </span>
-                  </div>
+          <div className="grid gap-4">
+            {filteredTestCases.map((testCase) => (
+              <div
+                key={testCase.id}
+                onClick={() => setSelectedTestCase(testCase)}
+                className="bg-gray-900 border border-gray-800 rounded-lg p-3 md:p-4 hover:border-blue-500 cursor-pointer transition-colors"
+              >
+                <div className="flex items-start justify-between gap-2 mb-2">
+                  <h3 className="text-base md:text-lg font-semibold text-white">{testCase.title}</h3>
+                  <span className={`px-2 py-1 rounded-full text-xs font-medium flex-shrink-0 ${
+                    testCase.priority === 'high' ? 'bg-red-500/20 text-red-400' :
+                    testCase.priority === 'medium' ? 'bg-yellow-500/20 text-yellow-400' :
+                    'bg-green-500/20 text-green-400'
+                  }`}>
+                    {testCase.priority}
+                  </span>
                 </div>
-              ))}
-            </div>
+                <p className="text-gray-400 text-sm mb-3 line-clamp-2">{testCase.description}</p>
+                <div className="flex flex-wrap items-center gap-2 text-xs text-gray-500">
+                  <span className="flex items-center space-x-1">
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" />
+                    </svg>
+                    <span>{testCase.steps.length} steps</span>
+                  </span>
+                  {testCase.category && (
+                    <span className="px-2 py-0.5 rounded bg-blue-500/20 text-blue-400 capitalize">
+                      {testCase.category}
+                    </span>
+                  )}
+                  <span className={`px-2 py-0.5 rounded ${
+                    testCase.status === 'Passed' ? 'bg-green-500/20 text-green-400' :
+                    testCase.status === 'Failed' ? 'bg-red-500/20 text-red-400' :
+                    'bg-gray-500/20 text-gray-400'
+                  }`}>
+                    {testCase.status || 'Not Run'}
+                  </span>
+                </div>
+              </div>
+            ))}
           </div>
         ) : (
-          <div className="h-full overflow-auto">
-            <table className="w-full text-sm text-left">
+          <div className="overflow-auto">
+            <table className="w-full text-sm text-left min-w-[800px]">
               <thead className="text-xs text-gray-400 uppercase bg-gray-900 sticky top-0">
                 <tr>
                   <th className="px-4 py-3 w-12">#</th>
