@@ -7,13 +7,19 @@ export const fetchCache = 'force-no-store';
 
 export async function GET(req: NextRequest) {
   try {
-    // Get jobId from the pathname
+    // Get jobId from the pathname and decode any percent-encoding
     const parts = req.nextUrl.pathname.split('/');
-    const jobId = parts[parts.length - 1];
+    let jobId = parts[parts.length - 1] || '';
+    try {
+      jobId = decodeURIComponent(jobId);
+    } catch (e) {
+      // ignore and use raw jobId
+    }
+    console.log(`Proxying processing-status request for jobId: ${jobId}`);
 
     const res = await fetch(`${BACKEND_URL}/api/processing-status/${encodeURIComponent(jobId)}`, {
-  cache: 'no-store',
-});
+      cache: 'no-store',
+    });
     const data = await res.json();
     return NextResponse.json(data, {
       status: res.status,

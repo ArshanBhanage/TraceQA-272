@@ -7,10 +7,15 @@ export const fetchCache = 'force-no-store';
 
 export async function POST(req: NextRequest) {
   try {
-    const { journey } = req.nextUrl.pathname.match(/generate-test-cases\/(.*)$/)?.groups || {};
     const parts = req.nextUrl.pathname.split('/');
-    const journeyName = parts[parts.length - 1];
-
+    let journeyName = parts[parts.length - 1] || '';
+    // Ensure we decode any percent-encoding from the incoming request
+    try {
+      journeyName = decodeURIComponent(journeyName);
+    } catch (e) {
+      // If decoding fails, fall back to raw value
+    }
+    console.log(`Proxying request for journey: ${journeyName} (encoded: ${encodeURIComponent(journeyName)})`);
     const res = await fetch(`${BACKEND_URL}/api/generate-test-cases/${encodeURIComponent(journeyName)}`, {
         cache: 'no-store',
       method: 'POST'

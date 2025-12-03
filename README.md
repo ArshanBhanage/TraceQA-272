@@ -211,9 +211,10 @@ npm run dev
 
 ### Access the Application
 
-- **Frontend**: http://localhost:3000
-- **Backend API**: http://localhost:8000
-- **API Docs (Swagger)**: http://localhost:8000/docs
+- **Frontend (Local)**: http://localhost:3000
+- **Frontend (Live)**: https://trace-qa-272-plut.vercel.app/
+- **Backend API (Local)**: http://localhost:8000
+- **Backend API (Swagger / Deployed)**: http://3.17.190.97:8000/docs
 - **API Docs (ReDoc)**: http://localhost:8000/redoc
 
 ---

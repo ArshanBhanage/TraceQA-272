@@ -7,11 +7,15 @@ export const fetchCache = 'force-no-store';
 
 export async function GET(req: NextRequest) {
   try {
-    const { journey } = req.nextUrl.pathname.match(/test-cases\/(.*)$/)?.groups || {};
-    // Use URL parsing 
+    // Extract last path segment and decode any percent-encoding
     const parts = req.nextUrl.pathname.split('/');
-    const journeyName = parts[parts.length - 1];
-
+    let journeyName = parts[parts.length - 1] || '';
+    try {
+      journeyName = decodeURIComponent(journeyName);
+    } catch (e) {
+      // fall back to raw value if decoding fails
+    }
+    console.log(`Proxying test-cases request for journey: ${journeyName} (encoded: ${encodeURIComponent(journeyName)})`);
     const res = await fetch(`${BACKEND_URL}/api/test-cases/${encodeURIComponent(journeyName)}`,{
         cache: 'no-store',
     });
